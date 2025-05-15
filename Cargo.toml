@@ -8,8 +8,6 @@ members = [
     # binary targets
     "stage1",
     "kernel",
-    # fuzzing
-    "fuzz",
     # ELF loader
     "elf",
     # TPM 2.0 Reference Implementation library
@@ -73,7 +71,6 @@ igvm = { version = "0.4.0", default-features = false }
 igvm_defs = { version = "0.4.0", default-features = false }
 intrusive-collections = "0.9.6"
 kbs-types = { version = "0.14.0", default-features = false }
-libfuzzer-sys = "0.4"
 log = "0.4.17"
 p384 = { version = "0.13.0" }
 rustc-demangle = { version = "0.1.26" }
