@@ -27,8 +27,6 @@ syscall.workspace = true
 aes-gcm = { workspace = true, features = ["aes", "alloc"] }
 bitfield-struct.workspace = true
 bitflags.workspace = true
-gdbstub = { workspace = true, optional = true }
-gdbstub_arch = { workspace = true, optional = true }
 igvm_defs = { workspace = true, features = ["unstable"] }
 intrusive-collections.workspace = true
 log = { workspace = true, features = ["max_level_info", "release_max_level_info"] }
@@ -52,7 +50,7 @@ test.workspace = true
 
 [features]
 default = []
-enable-gdb = ["dep:gdbstub", "dep:gdbstub_arch"]
+enable-gdb = []
 vtpm = ["dep:libtcgtpm"]
 nosmep = []
 nosmap = []
