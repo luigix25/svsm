@@ -63,6 +63,9 @@ use release::COCONUT_VERSION;
 #[cfg(feature = "attest")]
 use kbs_types::Tee;
 
+#[cfg(feature = "vsock")]
+use svsm::vsock::virtio_vsock::initialize_vsock;
+
 extern "C" {
     static bsp_stack: u8;
     static bsp_stack_end: u8;
@@ -350,6 +353,9 @@ pub fn svsm_main(cpu_index: usize) {
     if let Err(e) = SVSM_PLATFORM.prepare_fw(&config, new_kernel_region(&LAUNCH_INFO)) {
         panic!("Failed to prepare guest FW: {e:#?}");
     }
+
+    #[cfg(feature = "vsock")]
+    initialize_vsock();
 
     #[cfg(feature = "attest")]
     {
