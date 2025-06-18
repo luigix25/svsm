@@ -47,6 +47,8 @@ pub mod virtio;
 pub mod vmm;
 #[cfg(all(feature = "vtpm", not(test)))]
 pub mod vtpm;
+#[cfg(all(feature = "virtio-drivers", feature = "vsock"))]
+pub mod vsock;
 
 #[test]
 fn test_nop() {}
