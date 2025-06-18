@@ -36,6 +36,10 @@ IGVM_OBJ=""
 STATE_DEVICE=""
 STATE_ENABLE=""
 
+STATE_ENABLE="x-svsm-virtio-mmio=on"
+STATE_DEVICE+="-global virtio-mmio.force-legacy=false "
+STATE_DEVICE+="-device vhost-vsock-device,guest-cid=3 "
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     -q|--qemu)
