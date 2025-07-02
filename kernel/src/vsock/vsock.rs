@@ -80,7 +80,7 @@ impl VirtIOVsockDriver {
         res
     }
 
-    pub fn recv(&self, remote_cid : u32, remote_port : u32, buffer : &mut [u8], n_bytes: usize) -> Result<usize, ()> {
+    pub fn recv(&self, remote_cid : u32, remote_port : u32, buffer : &mut [u8]) -> Result<usize, ()> {
         let res = self.0.device.locked_do(|dev| {
             //dev sarebbe ConnectionManager
 
@@ -90,17 +90,13 @@ impl VirtIOVsockDriver {
                 port: remote_port,
             };
 
-            if n_bytes > buffer.len(){
-                return Err(());
-            }
-
             let mut first_clean_pos : usize = 0;
 
             // in questo modo se chiedo 5 byte non me ne puo' restituire di meno
             loop {
                 // Non puo' fare overflow nel buffer
                 // il buffer puo' essere piu' grande di quanti byte vogliamo leggere
-                let received = match dev.recv(server_address, local_port, &mut buffer[first_clean_pos .. n_bytes]) {
+                let received = match dev.recv(server_address, local_port, &mut buffer[first_clean_pos .. ]) {
                     Ok(received) => {
                         log::info!("Ricevuti: {received}");
                         received
@@ -111,7 +107,7 @@ impl VirtIOVsockDriver {
                 first_clean_pos += received;
 
                 // mi devo bloccare in attesa che arrivi un evento
-                if received < n_bytes && first_clean_pos != n_bytes {
+                if received < buffer.len() && first_clean_pos != buffer.len() {
                     let event = dev.wait_for_event().unwrap();
                     if event.source != server_address || event.destination.port != local_port {
                         // non un evento per me
@@ -130,12 +126,35 @@ impl VirtIOVsockDriver {
                 }
             }
 
-            Ok(n_bytes)
+            Ok(buffer.len())
         });
 
         res
     }
 
+    pub fn send(&self, remote_cid : u32, remote_port : u32, buffer : &[u8]) -> Result<usize, ()> {
+        let res = self.0.device.locked_do(|dev| {
+            //dev sarebbe ConnectionManager
+
+            let local_port = 1234;
+            let server_address = VsockAddr {
+                cid: VMADDR_CID_HOST,
+                port: remote_port,
+            };
+
+            return dev.send(server_address, local_port, &buffer);
+        });
+
+        match res {
+            Ok(a) => {
+                return Ok(buffer.len());
+            },
+            Err(e) => {
+                return Err(());
+            }
+
+        }
+    }
 }
 
 #[cfg(all(test, test_in_svsm))]
@@ -175,7 +194,7 @@ mod tests {
         }
 
         let mut buffer : [u8; 5] = [0; 5];
-        let ricevuto = match device.recv(2, 1234, &mut buffer, 5) {
+        let ricevuto = match device.recv(2, 1234, &mut buffer) {
             Ok(value) => value,
             Err(e) => {
                 log::info!("errore recv");
@@ -187,6 +206,14 @@ mod tests {
         log::info!("Mega effess, ricevuti {ricevuto}");
         let stringa = core::str::from_utf8(&buffer);
         log::info!("Mega effess, ricevuti {stringa:?}");
+
+        match device.send(2, 1234, &buffer) {
+            Ok(value) => log::info!("send ok"),
+            Err(e) => {
+                log::info!("errore send");
+                return;
+            }
+        }
 
         //}
     }
