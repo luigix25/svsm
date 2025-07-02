@@ -81,19 +81,21 @@ impl VirtIOVsockDriver {
     }
 
     pub fn recv(&self, remote_cid : u32, remote_port : u32, buffer : &mut [u8]) -> Result<usize, ()> {
-        let res = self.0.device.locked_do(|dev| {
-            //dev sarebbe ConnectionManager
 
-            let local_port = 1234;
-            let server_address = VsockAddr {
-                cid: VMADDR_CID_HOST,
-                port: remote_port,
-            };
+        let mut first_clean_pos : usize = 0;
 
-            let mut first_clean_pos : usize = 0;
+        loop {
+            let res = self.0.device.locked_do(|dev| {
+                //dev sarebbe ConnectionManager
 
-            // in questo modo se chiedo 5 byte non me ne puo' restituire di meno
-            loop {
+                let local_port = 1234;
+                let server_address = VsockAddr {
+                    cid: VMADDR_CID_HOST,
+                    port: remote_port,
+                };
+
+
+                // in questo modo se chiedo 5 byte non me ne puo' restituire di meno
                 // Non puo' fare overflow nel buffer
                 // il buffer puo' essere piu' grande di quanti byte vogliamo leggere
                 let received = match dev.recv(server_address, local_port, &mut buffer[first_clean_pos .. ]) {
@@ -124,10 +126,10 @@ impl VirtIOVsockDriver {
                 } else {
                     break;
                 }
-            }
 
-            Ok(buffer.len())
-        });
+                Ok(buffer.len())
+            });
+        }
 
         res
     }
