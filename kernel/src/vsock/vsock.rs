@@ -55,7 +55,6 @@ impl VirtIOVsockDriver {
                 }
 
                 match event.event_type {
-                    // Se l'evento è Disconnected, estrai 'reason' e stampalo
                     VsockEventType::Disconnected { reason } => {
                         log::info!("Connessione fallita: {:?}", reason);
                         return Err(())
@@ -85,53 +84,50 @@ impl VirtIOVsockDriver {
         let mut first_clean_pos : usize = 0;
 
         loop {
-            let res = self.0.device.locked_do(|dev| {
-                //dev sarebbe ConnectionManager
+            // Q: va out of scope alla fine del loop?
+            let mut dev = self.0.device.lock();
+            //dev sarebbe ConnectionManager
 
-                let local_port = 1234;
-                let server_address = VsockAddr {
-                    cid: VMADDR_CID_HOST,
-                    port: remote_port,
-                };
+            let local_port = 1234;
+            let server_address = VsockAddr {
+                cid: VMADDR_CID_HOST,
+                port: remote_port,
+            };
 
+            // in questo modo se chiedo 5 byte non me ne puo' restituire di meno
+            // Non puo' fare overflow nel buffer
+            let received = match dev.recv(server_address, local_port, &mut buffer[first_clean_pos .. ]) {
+                Ok(received) => {
+                    log::info!("Ricevuti: {received}");
+                    received
+                },
+                Err(e) => return Err(()),
+            };
 
-                // in questo modo se chiedo 5 byte non me ne puo' restituire di meno
-                // Non puo' fare overflow nel buffer
-                // il buffer puo' essere piu' grande di quanti byte vogliamo leggere
-                let received = match dev.recv(server_address, local_port, &mut buffer[first_clean_pos .. ]) {
-                    Ok(received) => {
-                        log::info!("Ricevuti: {received}");
-                        received
-                    },
-                    Err(e) => return Err(()),
-                };
+            first_clean_pos += received;
 
-                first_clean_pos += received;
-
-                // mi devo bloccare in attesa che arrivi un evento
-                if received < buffer.len() && first_clean_pos != buffer.len() {
-                    let event = dev.wait_for_event().unwrap();
-                    if event.source != server_address || event.destination.port != local_port {
-                        // non un evento per me
-                        log::info!("Ricevuto un evento (non mio). {:?}",event.event_type);
-                        continue;
-                    }
-
-                    log::info!("evento. {:?}",event);
-
-                    /*match event.event_type {
-                        VsockEventType::Disconnected
-                    }*/
-
-                } else {
-                    break;
+            // mi devo bloccare in attesa che arrivi un evento
+            if received < buffer.len() && first_clean_pos != buffer.len() {
+                let event = dev.wait_for_event().unwrap();
+                if event.source != server_address || event.destination.port != local_port {
+                    // non un evento per me
+                    log::info!("Ricevuto un evento (non mio). {:?}",event.event_type);
+                    continue;
                 }
 
-                Ok(buffer.len())
-            });
+                log::info!("evento. {:?}",event);
+
+                /*match event.event_type {
+                    VsockEventType::Disconnected
+                }*/
+
+            } else {
+                break;
+            }
         }
 
-        res
+        Ok(buffer.len())
+
     }
 
     pub fn send(&self, remote_cid : u32, remote_port : u32, buffer : &[u8]) -> Result<usize, ()> {
