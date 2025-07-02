@@ -18,50 +18,122 @@ impl VirtIOVsockDriver {
         Ok(VirtIOVsockDriver(VirtIOVsockDevice::new(mmio_base)?))
     }
 
-    pub fn prova(&self) -> bool {
-        self.0.device.locked_do(|dev| {
+    pub fn connect(&self, remote_cid : u32, remote_port : u32) -> Result<(), ()> {
+
+        let res = self.0.device.locked_do(|dev| {
             //dev sarebbe ConnectionManager
 
-            let port = 1234;
-            let host_address = VsockAddr {
+            let local_port = 1234;
+            let server_address = VsockAddr {
                 cid: VMADDR_CID_HOST,
-                port,
+                port: remote_port,
             };
 
-            log::info!("Connecting to host on port {port}...");
-            dev.connect(host_address, port);
+            log::info!("Connecting to host on port {remote_port}...");
 
-            let event = dev.wait_for_event().unwrap();
+            // send connection request
+            match dev.connect(server_address, local_port) {
+                Err(e) => {
+                    log::info!("Errore connect {e:?}");
+                    return Err(());
+                }
+                Ok(value) => {
+                    log::info!("connect driver ok {value:?}");
+                }
+            };
 
-            log::info!("{:?}",event.event_type);
+            // qui in mezzo mi puo' arrivare un evento da un'altra connessione?
+            // di sicuro non di connessione.
+            // Forse una richiesta di chiusura?
 
-            let buffer = b"abcd";
-            //log::info!("{}",buffer.size_of());
-
-            let res = dev.send(host_address, port, buffer);
-            {
-                //Ricevo un credit update
+            loop {
                 let event = dev.wait_for_event().unwrap();
-                //Sintassi a me sconosciuta
-                /*let VsockEventType::Received { length, .. } = event.event_type else {
-                    panic!("Received unexpected socket event {:?}", event);
-                };*/
-                //log::info!("{:?}",event.event_type);
+                if event.source != server_address || event.destination.port != local_port {
+                    // non un evento per me
+                    log::info!("Ricevuto un evento (non mio). {:?}",event.event_type);
+                    continue;
+                }
 
-                let mut buffer = [0u8; 24];
-                let read_length = dev.recv(host_address, port, &mut buffer);
-                log::info!(
-                    "Received message: {:?}({:?}), len: {:?}",
-                    buffer,
-                    core::str::from_utf8(&buffer[..4]),
-                    read_length
-                );
+                match event.event_type {
+                    // Se l'evento è Disconnected, estrai 'reason' e stampalo
+                    VsockEventType::Disconnected { reason } => {
+                        log::info!("Connessione fallita: {:?}", reason);
+                        return Err(())
+                    }
+
+                    VsockEventType::Connected => {
+                        log::info!("Connesso!");
+                        break;
+                    }
+
+                    // Per tutti gli altri tipi di evento, fai qualcos'altro
+                    _ => {
+                        log::info!("Ricevuto un evento. {:?}",event.event_type);
+                    }
+                }
+
             }
 
-            log::info!("{res:?}");
+            Ok(())
 
         });
-        true
+        res
+    }
+
+    pub fn recv(&self, remote_cid : u32, remote_port : u32, buffer : &mut [u8], n_bytes: usize) -> Result<usize, ()> {
+        let res = self.0.device.locked_do(|dev| {
+            //dev sarebbe ConnectionManager
+
+            let local_port = 1234;
+            let server_address = VsockAddr {
+                cid: VMADDR_CID_HOST,
+                port: remote_port,
+            };
+
+            if n_bytes > buffer.len(){
+                return Err(());
+            }
+
+            let mut first_clean_pos : usize = 0;
+
+            // in questo modo se chiedo 5 byte non me ne puo' restituire di meno
+            loop {
+                // Non puo' fare overflow nel buffer
+                // il buffer puo' essere piu' grande di quanti byte vogliamo leggere
+                let received = match dev.recv(server_address, local_port, &mut buffer[first_clean_pos .. n_bytes]) {
+                    Ok(received) => {
+                        log::info!("Ricevuti: {received}");
+                        received
+                    },
+                    Err(e) => return Err(()),
+                };
+
+                first_clean_pos += received;
+
+                // mi devo bloccare in attesa che arrivi un evento
+                if received < n_bytes && first_clean_pos != n_bytes {
+                    let event = dev.wait_for_event().unwrap();
+                    if event.source != server_address || event.destination.port != local_port {
+                        // non un evento per me
+                        log::info!("Ricevuto un evento (non mio). {:?}",event.event_type);
+                        continue;
+                    }
+
+                    log::info!("evento. {:?}",event);
+
+                    /*match event.event_type {
+                        VsockEventType::Disconnected
+                    }*/
+
+                } else {
+                    break;
+                }
+            }
+
+            Ok(n_bytes)
+        });
+
+        res
     }
 
 }
@@ -92,12 +164,29 @@ mod tests {
     fn test_virtio_vsock() {
 
         let device = get_vsock_device();
-        device.prova();
+
+        //remote_cid : u32, remote_port : u32
+        match device.connect(2, 1234){
+            Err(e) => {
+                log::info!("Connessione fallita.");
+                return;
+            },
+            Ok(o) => {}
+        }
+
+        let mut buffer : [u8; 5] = [0; 5];
+        let ricevuto = match device.recv(2, 1234, &mut buffer, 5) {
+            Ok(value) => value,
+            Err(e) => {
+                log::info!("errore recv");
+                return;
+            }
+        };
 
         //dentro VirtIOVsockDevice ho ConnectionManager
-        log::info!(
-            "Mega effess"
-        );
+        log::info!("Mega effess, ricevuti {ricevuto}");
+        let stringa = core::str::from_utf8(&buffer);
+        log::info!("Mega effess, ricevuti {stringa:?}");
 
         //}
     }
