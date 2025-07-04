@@ -20,6 +20,9 @@ impl VirtIOVsockDriver {
 
     pub fn connect(&self, remote_cid : u32, remote_port : u32) -> Result<(), ()> {
 
+        // Tengo bloccato tutto perche' non posso perdermi il pacchetto della connessione
+        // andata a buon fine/fallita
+
         let res = self.0.device.locked_do(|dev| {
             //dev sarebbe ConnectionManager
 
@@ -106,7 +109,9 @@ impl VirtIOVsockDriver {
 
             first_clean_pos += received;
 
-            // mi devo bloccare in attesa che arrivi un evento
+            // mi devo bloccare in attesa che arrivi un evento, non e' importante il tipo di evento
+            // nel caso di errore, sara' la recv a dare errore
+            // nel caso di dati invece la recv li leggera' correttamente
             if received < buffer.len() && first_clean_pos != buffer.len() {
                 let event = dev.wait_for_event().unwrap();
                 if event.source != server_address || event.destination.port != local_port {
@@ -130,7 +135,7 @@ impl VirtIOVsockDriver {
 
     }
 
-    pub fn send(&self, remote_cid : u32, remote_port : u32, buffer : &[u8]) -> Result<usize, ()> {
+    pub fn send(&self, remote_cid : u32, remote_port : u32, buffer : &[u8]) -> Result<(), ()> {
         let res = self.0.device.locked_do(|dev| {
             //dev sarebbe ConnectionManager
 
@@ -145,13 +150,39 @@ impl VirtIOVsockDriver {
 
         match res {
             Ok(a) => {
-                return Ok(buffer.len());
+                return Ok(());
             },
             Err(e) => {
                 return Err(());
             }
 
         }
+    }
+
+    pub fn close(&self, remote_cid : u32, remote_port : u32) -> Result<(), ()> {
+        let res = self.0.device.locked_do(|dev| {
+            //dev sarebbe ConnectionManager
+            let local_port = 1234;
+            let server_address = VsockAddr {
+                cid: VMADDR_CID_HOST,
+                port: remote_port,
+            };
+
+            dev.shutdown(server_address, local_port);
+
+            /*loop {
+                let event = dev.wait_for_event().unwrap();
+                if event.source != server_address || event.destination.port != local_port {
+                    // non un evento per me
+                    log::info!("Ricevuto un evento (non mio). {:?}",event.event_type);
+                    continue;
+                }
+            }*/
+
+
+            Ok(())
+        });
+        res
     }
 }
 
@@ -183,7 +214,7 @@ mod tests {
         let device = get_vsock_device();
 
         //remote_cid : u32, remote_port : u32
-        match device.connect(2, 1234){
+        match device.connect(2, 12345){
             Err(e) => {
                 log::info!("Connessione fallita.");
                 return;
@@ -192,7 +223,7 @@ mod tests {
         }
 
         let mut buffer : [u8; 5] = [0; 5];
-        let ricevuto = match device.recv(2, 1234, &mut buffer) {
+        let ricevuto = match device.recv(2, 12345, &mut buffer) {
             Ok(value) => value,
             Err(e) => {
                 log::info!("errore recv");
@@ -200,12 +231,15 @@ mod tests {
             }
         };
 
+        device.close(2, 12345);
+        log::info!("post close");
+
         //dentro VirtIOVsockDevice ho ConnectionManager
         log::info!("Mega effess, ricevuti {ricevuto}");
         let stringa = core::str::from_utf8(&buffer);
         log::info!("Mega effess, ricevuti {stringa:?}");
 
-        match device.send(2, 1234, &buffer) {
+        match device.send(2, 12345, &buffer) {
             Ok(value) => log::info!("send ok"),
             Err(e) => {
                 log::info!("errore send");
