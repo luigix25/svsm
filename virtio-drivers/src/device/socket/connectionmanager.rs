@@ -54,13 +54,20 @@ pub struct VsockConnectionManager<
     listening_ports: Vec<u32>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+/// Enum for the status of a connection
 pub enum ConnectionStatus {
+    /// new socket
     New,
+    /// listening
     Listen,
+    /// connection that has not been ack'd by the other peer
     Connecting,
+    /// connected
     Connected,
+    /// sent or received a shutdown
     Closing,
+    /// closed
     Close,
 }
 
@@ -112,6 +119,13 @@ impl<H: Hal, T: Transport, const RX_BUFFER_SIZE: usize>
     /// Returns the CID which has been assigned to this guest.
     pub fn guest_cid(&self) -> u64 {
         self.driver.guest_cid()
+    }
+
+    /// Returns the status of a connection
+    pub fn get_connection_status(&mut self, destination: VsockAddr, src_port: u32) -> Result<ConnectionStatus> {
+        let (_, connection) = get_connection(&mut self.connections, destination, src_port)?;
+
+        Ok(connection.status)
     }
 
     /// Allows incoming connections on the given port number.
