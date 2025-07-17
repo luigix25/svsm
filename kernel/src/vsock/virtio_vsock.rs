@@ -115,3 +115,62 @@ impl VirtIOVsockDriver {
         dev.shutdown(server_address, local_port)
     }
 }
+
+#[cfg(all(test, test_in_svsm))]
+mod tests {
+    use crate::{
+        fw_cfg::FwCfg, platform::SVSM_PLATFORM, testutils::has_test_iorequests, address::PhysAddr
+    };
+
+    use super::*;
+
+    fn get_vsock_device() -> VirtIOVsockDriver {
+        let cfg = FwCfg::new(SVSM_PLATFORM.get_io_port());
+
+        let dev = cfg
+            .get_virtio_mmio_addresses()
+            .unwrap_or_default()
+            .iter()
+            .find_map(|a| VirtIOVsockDriver::new(PhysAddr::from(*a)).ok())
+            .expect("No virtio-vsock device found");
+
+        dev
+    }
+
+    #[test]
+    #[cfg_attr(not(test_in_svsm), ignore = "Can only be run inside guest")]
+    fn test_virtio_vsock() {
+
+        let device = get_vsock_device();
+
+        if let Err(e) = device.connect(2, 1234, 12345) {
+            log::info!("Connection failed: {e}");
+            return;
+        }
+
+        let result = device.connect(2, 1234, 12345);
+        assert!(result.is_err(), "The second connection operation was expected to fail, but it succeeded.");
+
+        let mut buffer : [u8; 5] = [0; 5];
+        let n_bytes = device.recv(2, 1234, 12345, &mut buffer).unwrap_or_else(|error| {
+            log::info!("errore recv {error}");
+            return 0;
+        });
+
+        if n_bytes < buffer.len() {
+            log::info!("received less bytes than requested.");
+            return;
+        }
+
+        let stringa = core::str::from_utf8(&buffer).unwrap();
+        log::info!("received: {stringa:?}");
+
+        if let Err(e) = device.close(2, 1234, 12345) {
+            log::info!("Close failed: {e}");
+            return;
+        }
+
+        let result = device.send(2, 1234, 12345, &buffer);
+        assert!(result.is_err(), "The send operation was expected to fail, but it succeeded.");
+    }
+}
