@@ -139,5 +139,12 @@ jobs:
 
       - name: Run test-in-svsm in QEMU
         run: |
-          QEMU=./citests/qemu/bin/qemu-system-x86_64 scripts/test-qemu-nocc-svsm.sh
+          # Use the pull request number for the port and the cid to avoid conflicts if two (or more)
+          # actions run in parallel. On push-to-main events the PR number is empty, default to 0.
+          # 1024 is the first non reserved port, 10 is an arbitrary number that should be safe enough
+          # to avoid conflicts.
+          PR_NUM=${{ github.event.pull_request.number }}
+          VSOCK_PORT=$(( ${PR_NUM:-0} + 1024 ))
+          VSOCK_CID=$(( ${PR_NUM:-0} + 10 ))
+          QEMU=./citests/qemu/bin/qemu-system-x86_64 scripts/test-qemu-nocc-svsm.sh --vsock-port $VSOCK_PORT --vsock-cid $VSOCK_CID
 
