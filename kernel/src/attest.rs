@@ -14,6 +14,10 @@ use crate::{
     serial::SerialPort,
     utils::vec::try_to_vec,
 };
+
+#[cfg(feature = "vsock")]
+use crate::vsock::virtio_vsock::VsockStream;
+
 use aes::{cipher::BlockDecrypt, Aes256Dec};
 use aes_gcm::KeyInit;
 use alloc::{string::ToString, vec::Vec};
@@ -39,12 +43,18 @@ use sha2::{Digest, Sha512};
 use zerocopy::{FromBytes, IntoBytes};
 
 enum Transport <'a> {
+    #[cfg(feature = "vsock")]
+    Vsock(VsockStream),
     Serial(SerialPort<'a>)
 }
 
 impl Transport <'_> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, SvsmError> {
         match self {
+            #[cfg(feature = "vsock")]
+            Transport::Vsock(vsock) => {
+                vsock.write(buf)
+            },
             Transport::Serial(serial) => {
                 serial.write(buf)
             }
@@ -53,11 +63,21 @@ impl Transport <'_> {
 
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, SvsmError> {
         match self {
+            #[cfg(feature = "vsock")]
+            Transport::Vsock(vsock) => {
+                vsock.read(buf)
+            },
             Transport::Serial(serial) => {
                 serial.read(buf)
             }
         }
     }
+}
+
+fn create_serial_transport<'a>() -> Transport<'a> {
+    let sp = SerialPort::new(&DEFAULT_IO_DRIVER, 0x3e8); // COM3
+    sp.init();
+    Transport::Serial(sp)
 }
 
 /// The attestation driver that communicates with the proxy via some communication channel (serial
@@ -75,8 +95,6 @@ impl TryFrom<Tee> for AttestationDriver<'_> {
     fn try_from(tee: Tee) -> Result<Self, Self::Error> {
         // TODO: Make the IO port configurable/discoverable for other transport mechanisms such as
         // virtio-vsock.
-        let sp = SerialPort::new(&DEFAULT_IO_DRIVER, 0x3e8); // COM3
-        sp.init();
 
         match tee {
             Tee::Snp => (),
@@ -86,7 +104,24 @@ impl TryFrom<Tee> for AttestationDriver<'_> {
         let curve = Curve::new(TpmEccCurve::NistP521).map_err(AttestationError::Crypto)?;
         let ecc = sc_key_generate(&curve).map_err(AttestationError::Crypto)?;
 
-        let transport = Transport::Serial(sp);
+        let transport = {
+            #[cfg(feature = "vsock")]
+            {
+                match VsockStream::connect(1234, 12345, 2) {
+                    Ok(value) => {
+                        Transport::Vsock(value)
+                    },
+                    Err(_) => {
+                        create_serial_transport()
+                    }
+                }
+            }
+            #[cfg(not(feature = "vsock"))]
+            {
+                create_serial_transport()
+            }
+        };
+
         Ok(Self {transport, tee, ecc })
     }
 }
