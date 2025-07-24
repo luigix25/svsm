@@ -132,3 +132,82 @@ impl Drop for VsockStream {
         let _ = VSOCK_DEVICE.shutdown(self.remote_cid, self.local_port, self.remote_port, true);
     }
 }
+
+#[cfg(all(test, test_in_svsm))]
+mod tests {
+    use crate::{testutils::has_test_iorequests, vsock::VMADDR_CID_HOST, vsock::VMADDR_PORT_ANY};
+
+    use super::*;
+
+    fn start_vsock_server_host() -> u32 {
+        use crate::serial::Terminal;
+        use crate::testing::{IORequest, svsm_test_io};
+
+        let sp = svsm_test_io().unwrap();
+
+        sp.put_byte(IORequest::StartVsockServer as u8);
+
+        // Read port as 4 raw bytes (big-endian, sent by the host via xxd -p -r)
+        let mut port_bytes = [0u8; 4];
+        for byte in &mut port_bytes {
+            *byte = sp.get_byte();
+        }
+
+        let port = u32::from_be_bytes(port_bytes);
+        assert_ne!(port, VMADDR_PORT_ANY, "host failed to start vsock server");
+        port
+    }
+
+    #[test]
+    #[cfg_attr(not(test_in_svsm), ignore = "Can only be run inside guest")]
+    fn test_virtio_vsock_double_connect() {
+        if !has_test_iorequests() {
+            return;
+        }
+
+        let remote_port = start_vsock_server_host();
+
+        VsockStream::connect(remote_port, VMADDR_CID_HOST).expect("connection failed");
+
+        VsockStream::connect(remote_port, VMADDR_CID_HOST)
+            .expect_err("The second connection operation was expected to fail, but it succeeded.");
+    }
+
+    #[test]
+    #[cfg_attr(not(test_in_svsm), ignore = "Can only be run inside guest")]
+    fn test_virtio_vsock_write() {
+        if !has_test_iorequests() {
+            return;
+        }
+
+        let remote_port = start_vsock_server_host();
+
+        let mut stream =
+            VsockStream::connect(remote_port, VMADDR_CID_HOST).expect("connection failed");
+
+        let buffer: &[u8] = b"Hello world!";
+
+        let n_bytes = stream.write(buffer).expect("write failed");
+        assert_eq!(n_bytes, buffer.len(), "Sent less bytes than requested");
+    }
+
+    #[test]
+    #[cfg_attr(not(test_in_svsm), ignore = "Can only be run inside guest")]
+    fn test_virtio_vsock_read() {
+        if !has_test_iorequests() {
+            return;
+        }
+
+        let remote_port = start_vsock_server_host();
+
+        let mut stream =
+            VsockStream::connect(remote_port, VMADDR_CID_HOST).expect("connection failed");
+
+        let mut buffer: [u8; 11] = [0; 11];
+        let n_bytes = stream.read(&mut buffer).expect("read failed");
+        assert_eq!(n_bytes, buffer.len(), "Received less bytes than requested");
+
+        let string = core::str::from_utf8(&buffer).unwrap();
+        assert_eq!(string, "hello_world", "Received wrong message");
+    }
+}
