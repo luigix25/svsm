@@ -90,7 +90,7 @@ $(IGVMMEASURE):
 	cargo build ${CARGO_ARGS} --package igvmmeasure
 
 bin/coconut-qemu.igvm: $(IGVMBUILDER) $(IGVMMEASURE) bin/stage1-trampoline.bin bin/svsm-kernel.elf bin/stage2.bin ${FS_BIN}
-	$(IGVMBUILDER) --sort --policy 0x30000 --output $@ --tdx-stage1 bin/stage1-trampoline.bin --stage2 bin/stage2.bin --kernel bin/svsm-kernel.elf --filesystem ${FS_BIN} ${BUILD_FW} qemu --snp --tdp
+	$(IGVMBUILDER) --sort --policy 0x30000 --output $@ --tdx-stage1 bin/stage1-trampoline.bin --stage2 bin/stage2.bin --kernel bin/svsm-kernel.elf --filesystem ${FS_BIN} ${BUILD_FW} qemu --snp --tdp --native
 	$(IGVMMEASURE) --check-kvm $@ measure
 
 bin/coconut-hyperv.igvm: $(IGVMBUILDER) $(IGVMMEASURE) bin/stage1-trampoline.bin bin/svsm-kernel.elf bin/stage2.bin

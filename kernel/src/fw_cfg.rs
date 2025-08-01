@@ -211,6 +211,12 @@ impl<'a> FwCfg<'a> {
                 }
             }
         }
+
+        let it = addresses.iter();
+
+        for addr in it {
+            log::info!("{:x}",addr);
+        }
         Ok(addresses)
     }
 }

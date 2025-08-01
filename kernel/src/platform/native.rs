@@ -237,11 +237,34 @@ impl SvsmPlatform for NativePlatform {
         Ok(())
     }
 
-    unsafe fn mmio_write(&self, _paddr: PhysAddr, _data: &[u8]) -> Result<(), SvsmError> {
-        unimplemented!()
+    unsafe fn mmio_write(&self, paddr: PhysAddr, data: &[u8]) -> Result<(), SvsmError> {
+        log::info!("mmio_write, addr: {paddr:x}");
+        let addr = u64::from(paddr);
+        let ptr = addr as *mut u8;
+
+        let it = data.iter();
+
+        for val in it {
+            unsafe {
+                ptr::write_volatile(ptr , *val);
+            }
+        }
+        Ok(())
     }
 
-    unsafe fn mmio_read(&self, _paddr: PhysAddr, _data: &mut [u8]) -> Result<(), SvsmError> {
-        unimplemented!()
+    unsafe fn mmio_read(&self, paddr: PhysAddr, data: &mut [u8]) -> Result<(), SvsmError> {
+        log::info!("mmio_read, addr: {paddr:x}");
+
+        let addr = u64::from(paddr);
+        let ptr = addr as *mut u8;
+
+        let it = data.iter_mut();
+
+        for val in it {
+            unsafe {
+                *val = ptr::read_volatile(ptr);
+            }
+        }
+        Ok(())
     }
 }

@@ -55,6 +55,9 @@ use svsm::utils::{immut_after_init::ImmutAfterInitCell, zero_mem_region, MemoryR
 #[cfg(all(feature = "vtpm", not(test)))]
 use svsm::vtpm::vtpm_init;
 
+#[cfg(feature = "vsock")]
+use svsm::vsock::virtio_vsock::VsockStream;
+
 use svsm::mm::validate::{init_valid_bitmap_ptr, migrate_valid_bitmap};
 
 use alloc::string::String;
@@ -389,6 +392,21 @@ pub extern "C" fn svsm_main(cpu_index: usize) {
     if SVSM_PLATFORM.start_svsm_request_loop() {
         start_kernel_task(request_loop_main, 0, String::from("request-loop on CPU 0"))
             .expect("Failed to launch request loop task");
+    } else {
+        log::info!("nothing to do!");
+        #[cfg(feature = "vsock")]
+        {
+            use svsm::io::{Read, Write};
+
+            let mut stream = VsockStream::connect(1234, 12345, 2).unwrap();
+            stream.write(b"buf");
+            let mut buffer: [u8;4] = [0; 4];
+            stream.read(&mut buffer);
+
+            let string = String::from_utf8_lossy(&buffer);
+            log::info!("Received: {string}");
+        }
+
     }
 
     cpu_idle_loop(cpu_index);
