@@ -66,7 +66,7 @@ use release::COCONUT_VERSION;
 use kbs_types::Tee;
 
 #[cfg(feature = "vsock")]
-use svsm::vsock::virtio_vsock::initialize_vsock;
+use svsm::vsock::{stream::VsockStream, virtio_vsock::initialize_vsock};
 
 extern "C" {
     static bsp_stack: u8;
@@ -394,6 +394,26 @@ pub fn svsm_main(cpu_index: usize) {
     match exec_user("/init", opendir("/").expect("Failed to find FS root")) {
         Ok(_) => (),
         Err(e) => log::info!("Failed to launch /init: {e:?}"),
+    }
+
+    #[cfg(feature = "vsock")]
+    {
+        use svsm::io::{Read, Write};
+
+        let mut stream = VsockStream::connect(12345, 2).unwrap();
+        let _written_bytes = stream.write(b"buf").unwrap();
+        let mut buffer: [u8; 4] = [0; 4];
+        let mut read_bytes = stream.read(&mut buffer).unwrap();
+        log::info!("[main] Ricevuti: {read_bytes}");
+
+        let string = String::from_utf8_lossy(&buffer);
+        log::info!("Received: {string}");
+
+        read_bytes = stream.read(&mut buffer).unwrap();
+        log::info!("[main] Ricevuti: {read_bytes}");
+
+        read_bytes = stream.read(&mut buffer).unwrap();
+        log::info!("[main] Ricevuti: {read_bytes}");
     }
 
     // Start request processing on this CPU if required.
