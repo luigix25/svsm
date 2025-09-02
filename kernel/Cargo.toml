@@ -42,8 +42,6 @@ cocoon-tpm-crypto = { workspace = true, features = [
 cocoon-tpm-tpm2-interface = { workspace = true, optional = true }
 cocoon-tpm-utils-common = { workspace = true, optional = true }
 concat-kdf = { workspace = true, optional = true }
-gdbstub = { workspace = true, optional = true }
-gdbstub_arch = { workspace = true, optional = true }
 igvm_defs = { workspace = true, features = ["unstable"] }
 intrusive-collections.workspace = true
 kbs-types = { workspace = true, optional = true, features = ["alloc"] }
@@ -74,7 +72,7 @@ test.workspace = true
 attest = ["dep:aes-kw", "dep:cocoon-tpm-crypto", "dep:cocoon-tpm-tpm2-interface", "dep:cocoon-tpm-utils-common", "dep:concat-kdf", "dep:kbs-types", "dep:libaproxy", "dep:serde", "dep:serde_json"]
 
 default = []
-enable-gdb = ["dep:gdbstub", "dep:gdbstub_arch"]
+enable-gdb = []
 vtpm = ["dep:libtcgtpm"]
 nosmep = []
 nosmap = []
