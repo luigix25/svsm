@@ -65,7 +65,6 @@ cocoon-tpm-utils-common = { version = "0.1.0", default-features = false }
 igvm = { version = "0.4.0", default-features = false }
 igvm_defs = { version = "0.4.0", default-features = false }
 intrusive-collections = "0.9.6"
-kbs-types = { version = "0.10.0", default-features = false }
 log = "0.4.17"
 p384 = { version = "0.13.0" }
 serde = { version = "1.0.215", default-features = false }
