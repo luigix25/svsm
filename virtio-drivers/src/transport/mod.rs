@@ -10,7 +10,7 @@ use crate::{PhysAddr, Result, PAGE_SIZE};
 use bitflags::{bitflags, Flags};
 use core::{fmt::Debug, ops::BitAnd, ptr::NonNull};
 use log::debug;
-use zerocopy::{FromBytes, Immutable, IntoBytes};
+use zerocopy::{FromBytes, Immutable, IntoBytes, LittleEndian, U32};
 
 /// A VirtIO transport layer.
 pub trait Transport {
@@ -134,6 +134,12 @@ bitflags! {
         /// Indicates that the device has experienced an error from which it
         /// can’t recover.
         const DEVICE_NEEDS_RESET = 64;
+    }
+}
+
+impl DeviceStatus {
+    pub fn as_le_32(&self) -> U32<LittleEndian> {
+        self.bits().into()
     }
 }
 

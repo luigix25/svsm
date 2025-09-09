@@ -17,6 +17,8 @@ use core::{
     ptr::NonNull,
 };
 
+use zerocopy::byteorder::{LittleEndian, U32};
+
 const MAGIC_VALUE: u32 = 0x7472_6976;
 pub(crate) const LEGACY_VERSION: u32 = 1;
 pub(crate) const MODERN_VERSION: u32 = 2;
@@ -32,10 +34,11 @@ pub enum MmioVersion {
     Modern = MODERN_VERSION,
 }
 
-impl TryFrom<u32> for MmioVersion {
+impl TryFrom<U32<LittleEndian>> for MmioVersion {
     type Error = MmioError;
 
-    fn try_from(version: u32) -> Result<Self, Self::Error> {
+    fn try_from(version: U32<LittleEndian>) -> Result<Self, Self::Error> {
+        let version: u32 = version.into();
         match version {
             LEGACY_VERSION => Ok(Self::Legacy),
             MODERN_VERSION => Ok(Self::Modern),
@@ -86,33 +89,33 @@ impl Display for MmioError {
 #[repr(C)]
 pub struct VirtIOHeader {
     /// Magic value
-    magic: ReadOnly<u32>,
+    magic: ReadOnly<U32<LittleEndian>>,
 
     /// Device version number
     ///
     /// Legacy device returns value 0x1.
-    version: ReadOnly<u32>,
+    version: ReadOnly<U32<LittleEndian>>,
 
     /// Virtio Subsystem Device ID
-    device_id: ReadOnly<u32>,
+    device_id: ReadOnly<U32<LittleEndian>>,
 
     /// Virtio Subsystem Vendor ID
-    vendor_id: ReadOnly<u32>,
+    vendor_id: ReadOnly<U32<LittleEndian>>,
 
     /// Flags representing features the device supports
-    device_features: ReadOnly<u32>,
+    device_features: ReadOnly<U32<LittleEndian>>,
 
     /// Device (host) features word selection
-    device_features_sel: WriteOnly<u32>,
+    device_features_sel: WriteOnly<U32<LittleEndian>>,
 
     /// Reserved
-    __r1: [ReadOnly<u32>; 2],
+    __r1: [ReadOnly<U32<LittleEndian>>; 2],
 
     /// Flags representing device features understood and activated by the driver
-    driver_features: WriteOnly<u32>,
+    driver_features: WriteOnly<U32<LittleEndian>>,
 
     /// Activated (guest) features word selection
-    driver_features_sel: WriteOnly<u32>,
+    driver_features_sel: WriteOnly<U32<LittleEndian>>,
 
     /// Guest page size
     ///
@@ -120,17 +123,17 @@ pub struct VirtIOHeader {
     /// initialization, before any queues are used. This value should be a
     /// power of 2 and is used by the device to calculate the Guest address
     /// of the first queue page (see QueuePFN).
-    legacy_guest_page_size: WriteOnly<u32>,
+    legacy_guest_page_size: WriteOnly<U32<LittleEndian>>,
 
     /// Reserved
-    __r2: ReadOnly<u32>,
+    __r2: ReadOnly<U32<LittleEndian>>,
 
     /// Virtual queue index
     ///
     /// Writing to this register selects the virtual queue that the following
     /// operations on the QueueNumMax, QueueNum, QueueAlign and QueuePFN
     /// registers apply to. The index number of the first queue is zero (0x0).
-    queue_sel: WriteOnly<u32>,
+    queue_sel: WriteOnly<U32<LittleEndian>>,
 
     /// Maximum virtual queue size
     ///
@@ -139,21 +142,21 @@ pub struct VirtIOHeader {
     /// This applies to the queue selected by writing to QueueSel and is
     /// allowed only when QueuePFN is set to zero (0x0), so when the queue is
     /// not actively used.
-    queue_num_max: ReadOnly<u32>,
+    queue_num_max: ReadOnly<U32<LittleEndian>>,
 
     /// Virtual queue size
     ///
     /// Queue size is the number of elements in the queue. Writing to this
     /// register notifies the device what size of the queue the driver will use.
     /// This applies to the queue selected by writing to QueueSel.
-    queue_num: WriteOnly<u32>,
+    queue_num: WriteOnly<U32<LittleEndian>>,
 
     /// Used Ring alignment in the virtual queue
     ///
     /// Writing to this register notifies the device about alignment boundary
     /// of the Used Ring in bytes. This value should be a power of 2 and
     /// applies to the queue selected by writing to QueueSel.
-    legacy_queue_align: WriteOnly<u32>,
+    legacy_queue_align: WriteOnly<U32<LittleEndian>>,
 
     /// Guest physical page number of the virtual queue
     ///
@@ -166,28 +169,28 @@ pub struct VirtIOHeader {
     /// number of the queue, therefore a value other than zero (0x0) means that
     /// the queue is in use. Both read and write accesses apply to the queue
     /// selected by writing to QueueSel.
-    legacy_queue_pfn: Volatile<u32>,
+    legacy_queue_pfn: Volatile<U32<LittleEndian>>,
 
     /// new interface only
-    queue_ready: Volatile<u32>,
+    queue_ready: Volatile<U32<LittleEndian>>,
 
     /// Reserved
-    __r3: [ReadOnly<u32>; 2],
+    __r3: [ReadOnly<U32<LittleEndian>>; 2],
 
     /// Queue notifier
-    queue_notify: WriteOnly<u32>,
+    queue_notify: WriteOnly<U32<LittleEndian>>,
 
     /// Reserved
-    __r4: [ReadOnly<u32>; 3],
+    __r4: [ReadOnly<U32<LittleEndian>>; 3],
 
     /// Interrupt status
-    interrupt_status: ReadOnly<u32>,
+    interrupt_status: ReadOnly<U32<LittleEndian>>,
 
     /// Interrupt acknowledge
-    interrupt_ack: WriteOnly<u32>,
+    interrupt_ack: WriteOnly<U32<LittleEndian>>,
 
     /// Reserved
-    __r5: [ReadOnly<u32>; 2],
+    __r5: [ReadOnly<U32<LittleEndian>>; 2],
 
     /// Device status
     ///
@@ -196,31 +199,31 @@ pub struct VirtIOHeader {
     /// indicating the OS/driver progress. Writing zero (0x0) to this register
     /// triggers a device reset. The device sets QueuePFN to zero (0x0) for
     /// all queues in the device. Also see 3.1 Device Initialization.
-    status: Volatile<DeviceStatus>,
+    status: Volatile<U32<LittleEndian>>,
 
     /// Reserved
-    __r6: [ReadOnly<u32>; 3],
+    __r6: [ReadOnly<U32<LittleEndian>>; 3],
 
     // new interface only since here
-    queue_desc_low: WriteOnly<u32>,
-    queue_desc_high: WriteOnly<u32>,
+    queue_desc_low: WriteOnly<U32<LittleEndian>>,
+    queue_desc_high: WriteOnly<U32<LittleEndian>>,
 
     /// Reserved
-    __r7: [ReadOnly<u32>; 2],
+    __r7: [ReadOnly<U32<LittleEndian>>; 2],
 
-    queue_driver_low: WriteOnly<u32>,
-    queue_driver_high: WriteOnly<u32>,
-
-    /// Reserved
-    __r8: [ReadOnly<u32>; 2],
-
-    queue_device_low: WriteOnly<u32>,
-    queue_device_high: WriteOnly<u32>,
+    queue_driver_low: WriteOnly<U32<LittleEndian>>,
+    queue_driver_high: WriteOnly<U32<LittleEndian>>,
 
     /// Reserved
-    __r9: [ReadOnly<u32>; 21],
+    __r8: [ReadOnly<U32<LittleEndian>>; 2],
 
-    config_generation: ReadOnly<u32>,
+    queue_device_low: WriteOnly<U32<LittleEndian>>,
+    queue_device_high: WriteOnly<U32<LittleEndian>>,
+
+    /// Reserved
+    __r9: [ReadOnly<U32<LittleEndian>>; 21],
+
+    config_generation: ReadOnly<U32<LittleEndian>>,
 }
 
 impl VirtIOHeader {
@@ -234,11 +237,11 @@ impl VirtIOHeader {
         queue_num_max: u32,
     ) -> Self {
         Self {
-            magic: ReadOnly::new(MAGIC_VALUE),
-            version: ReadOnly::new(version),
-            device_id: ReadOnly::new(device_id),
-            vendor_id: ReadOnly::new(vendor_id),
-            device_features: ReadOnly::new(device_features),
+            magic: ReadOnly::new(MAGIC_VALUE.into()),
+            version: ReadOnly::new(version.into()),
+            device_id: ReadOnly::new(device_id.into()),
+            vendor_id: ReadOnly::new(vendor_id.into()),
+            device_features: ReadOnly::new(device_features.into()),
             device_features_sel: WriteOnly::default(),
             __r1: Default::default(),
             driver_features: Default::default(),
@@ -246,7 +249,7 @@ impl VirtIOHeader {
             legacy_guest_page_size: Default::default(),
             __r2: Default::default(),
             queue_sel: Default::default(),
-            queue_num_max: ReadOnly::new(queue_num_max),
+            queue_num_max: ReadOnly::new(queue_num_max.into()),
             queue_num: Default::default(),
             legacy_queue_align: Default::default(),
             legacy_queue_pfn: Default::default(),
@@ -257,7 +260,7 @@ impl VirtIOHeader {
             interrupt_status: Default::default(),
             interrupt_ack: Default::default(),
             __r5: Default::default(),
-            status: Volatile::new(DeviceStatus::empty()),
+            status: Volatile::new(DeviceStatus::empty().as_le_32()),
             __r6: Default::default(),
             queue_desc_low: Default::default(),
             queue_desc_high: Default::default(),
@@ -293,7 +296,7 @@ impl<H: Hal> MmioTransport<H> {
     pub unsafe fn new(header: NonNull<VirtIOHeader>) -> Result<Self, MmioError> {
         let magic = volread!(H, header, magic);
         if magic != MAGIC_VALUE {
-            return Err(MmioError::BadMagic(magic));
+            return Err(MmioError::BadMagic(magic.into()));
         }
         if volread!(H, header, device_id) == 0 {
             return Err(MmioError::ZeroDeviceId);
@@ -314,7 +317,7 @@ impl<H: Hal> MmioTransport<H> {
     /// Gets the vendor ID.
     pub fn vendor_id(&self) -> u32 {
         // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
-        unsafe { volread!(H, self.header, vendor_id) }
+        unsafe { volread!(H, self.header, vendor_id) }.into()
     }
 }
 
@@ -328,17 +331,18 @@ unsafe impl<H: Hal> Sync for MmioTransport<H> {}
 impl<H: Hal> Transport for MmioTransport<H> {
     fn device_type(&self) -> DeviceType {
         // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
-        let device_id = unsafe { volread!(H, self.header, device_id) };
+        let device_id: u32 = unsafe { volread!(H, self.header, device_id) }.into();
         device_id.into()
     }
 
     fn read_device_features(&mut self) -> u64 {
         // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
         unsafe {
-            volwrite!(H, self.header, device_features_sel, 0); // device features [0, 32)
+            volwrite!(H, self.header, device_features_sel, 0.into()); // device features [0, 32)
             let mut device_features_bits = volread!(H, self.header, device_features).into();
-            volwrite!(H, self.header, device_features_sel, 1); // device features [32, 64)
-            device_features_bits += (volread!(H, self.header, device_features) as u64) << 32;
+            volwrite!(H, self.header, device_features_sel, 1.into()); // device features [32, 64)
+            let device_feature: u32 = volread!(H, self.header, device_features).into();
+            device_features_bits += (device_feature as u64) << 32;
             device_features_bits
         }
     }
@@ -346,14 +350,14 @@ impl<H: Hal> Transport for MmioTransport<H> {
     fn write_driver_features(&mut self, driver_features: u64) {
         // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
         unsafe {
-            volwrite!(H, self.header, driver_features_sel, 0); // driver features [0, 32)
-            volwrite!(H, self.header, driver_features, driver_features as u32);
-            volwrite!(H, self.header, driver_features_sel, 1); // driver features [32, 64)
+            volwrite!(H, self.header, driver_features_sel, 0.into()); // driver features [0, 32)
+            volwrite!(H, self.header, driver_features, (driver_features as u32).into());
+            volwrite!(H, self.header, driver_features_sel, 1.into()); // driver features [32, 64)
             volwrite!(
                 H,
                 self.header,
                 driver_features,
-                (driver_features >> 32) as u32
+                ((driver_features >> 32) as u32).into()
             );
         }
     }
@@ -361,27 +365,28 @@ impl<H: Hal> Transport for MmioTransport<H> {
     fn max_queue_size(&mut self, queue: u16) -> u32 {
         // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
         unsafe {
-            volwrite!(H, self.header, queue_sel, queue.into());
-            volread!(H, self.header, queue_num_max)
+            volwrite!(H, self.header, queue_sel, (queue as u32).into());
+            volread!(H, self.header, queue_num_max).into()
         }
     }
 
     fn notify(&mut self, queue: u16) {
         // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
         unsafe {
-            volwrite!(H, self.header, queue_notify, queue.into());
+            volwrite!(H, self.header, queue_notify, (queue as u32).into());
         }
     }
 
     fn get_status(&self) -> DeviceStatus {
         // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
-        unsafe { volread!(H, self.header, status) }
+        let value = unsafe { volread!(H, self.header, status) };
+        DeviceStatus(value.into())
     }
 
     fn set_status(&mut self, status: DeviceStatus) {
         // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
         unsafe {
-            volwrite!(H, self.header, status, status);
+            volwrite!(H, self.header, status, status.as_le_32());
         }
     }
 
@@ -390,7 +395,7 @@ impl<H: Hal> Transport for MmioTransport<H> {
             MmioVersion::Legacy => {
                 // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
                 unsafe {
-                    volwrite!(H, self.header, legacy_guest_page_size, guest_page_size);
+                    volwrite!(H, self.header, legacy_guest_page_size, guest_page_size.into());
                 }
             }
             MmioVersion::Modern => {
@@ -432,34 +437,34 @@ impl<H: Hal> Transport for MmioTransport<H> {
                 assert_eq!(pfn as usize * PAGE_SIZE, descriptors);
                 // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
                 unsafe {
-                    volwrite!(H, self.header, queue_sel, queue.into());
-                    volwrite!(H, self.header, queue_num, size);
-                    volwrite!(H, self.header, legacy_queue_align, align);
-                    volwrite!(H, self.header, legacy_queue_pfn, pfn);
+                    volwrite!(H, self.header, queue_sel, (queue as u32).into());
+                    volwrite!(H, self.header, queue_num, size.into());
+                    volwrite!(H, self.header, legacy_queue_align, align.into());
+                    volwrite!(H, self.header, legacy_queue_pfn, pfn.into());
                 }
             }
             MmioVersion::Modern => {
                 // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
                 unsafe {
-                    volwrite!(H, self.header, queue_sel, queue.into());
-                    volwrite!(H, self.header, queue_num, size);
-                    volwrite!(H, self.header, queue_desc_low, descriptors as u32);
-                    volwrite!(H, self.header, queue_desc_high, (descriptors >> 32) as u32);
-                    volwrite!(H, self.header, queue_driver_low, driver_area as u32);
+                    volwrite!(H, self.header, queue_sel, (queue as u32).into());
+                    volwrite!(H, self.header, queue_num, size.into());
+                    volwrite!(H, self.header, queue_desc_low, (descriptors as u32).into());
+                    volwrite!(H, self.header, queue_desc_high, ((descriptors >> 32) as u32).into());
+                    volwrite!(H, self.header, queue_driver_low, (driver_area as u32).into());
                     volwrite!(
                         H,
                         self.header,
                         queue_driver_high,
-                        (driver_area >> 32) as u32
+                        ((driver_area >> 32) as u32).into()
                     );
-                    volwrite!(H, self.header, queue_device_low, device_area as u32);
+                    volwrite!(H, self.header, queue_device_low, (device_area as u32).into());
                     volwrite!(
                         H,
                         self.header,
                         queue_device_high,
-                        (device_area >> 32) as u32
+                        ((device_area >> 32) as u32).into()
                     );
-                    volwrite!(H, self.header, queue_ready, 1);
+                    volwrite!(H, self.header, queue_ready, 1.into());
                 }
             }
         }
@@ -470,28 +475,28 @@ impl<H: Hal> Transport for MmioTransport<H> {
             MmioVersion::Legacy => {
                 // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
                 unsafe {
-                    volwrite!(H, self.header, queue_sel, queue.into());
-                    volwrite!(H, self.header, queue_num, 0);
-                    volwrite!(H, self.header, legacy_queue_align, 0);
-                    volwrite!(H, self.header, legacy_queue_pfn, 0);
+                    volwrite!(H, self.header, queue_sel, (queue as u32).into());
+                    volwrite!(H, self.header, queue_num, 0.into());
+                    volwrite!(H, self.header, legacy_queue_align, 0.into());
+                    volwrite!(H, self.header, legacy_queue_pfn, 0.into());
                 }
             }
             MmioVersion::Modern => {
                 // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
                 unsafe {
-                    volwrite!(H, self.header, queue_sel, queue.into());
+                    volwrite!(H, self.header, queue_sel, (queue as u32).into());
 
-                    volwrite!(H, self.header, queue_ready, 0);
+                    volwrite!(H, self.header, queue_ready, 0.into());
                     // Wait until we read the same value back, to ensure synchronisation (see 4.2.2.2).
                     while volread!(H, self.header, queue_ready) != 0 {}
 
-                    volwrite!(H, self.header, queue_num, 0);
-                    volwrite!(H, self.header, queue_desc_low, 0);
-                    volwrite!(H, self.header, queue_desc_high, 0);
-                    volwrite!(H, self.header, queue_driver_low, 0);
-                    volwrite!(H, self.header, queue_driver_high, 0);
-                    volwrite!(H, self.header, queue_device_low, 0);
-                    volwrite!(H, self.header, queue_device_high, 0);
+                    volwrite!(H, self.header, queue_num, 0.into());
+                    volwrite!(H, self.header, queue_desc_low, 0.into());
+                    volwrite!(H, self.header, queue_desc_high, 0.into());
+                    volwrite!(H, self.header, queue_driver_low, 0.into());
+                    volwrite!(H, self.header, queue_driver_high, 0.into());
+                    volwrite!(H, self.header, queue_device_low, 0.into());
+                    volwrite!(H, self.header, queue_device_high, 0.into());
                 }
             }
         }
@@ -500,7 +505,7 @@ impl<H: Hal> Transport for MmioTransport<H> {
     fn queue_used(&mut self, queue: u16) -> bool {
         // SAFETY: Safe because self.header points to a valid VirtIO MMIO region.
         unsafe {
-            volwrite!(H, self.header, queue_sel, queue.into());
+            volwrite!(H, self.header, queue_sel, (queue as u32).into());
             match self.version {
                 MmioVersion::Legacy => volread!(H, self.header, legacy_queue_pfn) != 0,
                 MmioVersion::Modern => volread!(H, self.header, queue_ready) != 0,
