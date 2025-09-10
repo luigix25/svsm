@@ -20,7 +20,7 @@ use core::mem::{size_of, take};
 use core::ptr;
 use core::ptr::NonNull;
 use core::sync::atomic::{fence, AtomicU16, Ordering};
-use zerocopy::{FromBytes, FromZeros, Immutable, IntoBytes, KnownLayout};
+use zerocopy::{FromBytes, FromZeros, Immutable, IntoBytes, KnownLayout, LittleEndian, U16, U32, U64};
 
 /// The mechanism for bulk data transport on virtio devices.
 ///
@@ -115,11 +115,11 @@ impl<H: Hal, const SIZE: usize> VirtQueue<H, SIZE> {
         let mut desc_shadow: [Descriptor; SIZE] = FromZeros::new_zeroed();
         // Link descriptors together.
         for i in 0..(size - 1) {
-            desc_shadow[i as usize].next = i + 1;
+            desc_shadow[i as usize].next = (i + 1).into();
             // SAFETY: Safe because `desc` is properly aligned, dereferenceable, initialised, and the device
             // won't access the descriptors for the duration of this unsafe block.
             unsafe {
-                (*desc.as_ptr())[i as usize].next = i + 1;
+                (*desc.as_ptr())[i as usize].next = (i + 1).into();
             }
         }
 
@@ -435,7 +435,7 @@ impl<H: Hal, const SIZE: usize> VirtQueue<H, SIZE> {
                 let paddr = head_desc.addr;
                 head_desc.unset_buf();
                 self.num_used -= 1;
-                head_desc.next = original_free_head;
+                head_desc.next = original_free_head.into();
 
                 // SAFETY: Memory at `paddr` has been shared using `H::share`
                 unsafe {
@@ -475,7 +475,7 @@ impl<H: Hal, const SIZE: usize> VirtQueue<H, SIZE> {
                 self.num_used -= 1;
                 next = desc.next();
                 if next.is_none() {
-                    desc.next = original_free_head;
+                    desc.next = original_free_head.into();
                 }
 
                 self.write_desc(desc_index);
@@ -705,10 +705,10 @@ fn queue_part_sizes(queue_size: u16) -> (usize, usize, usize) {
 #[repr(C, align(16))]
 #[derive(Clone, Debug, FromBytes, Immutable, IntoBytes, KnownLayout)]
 pub(crate) struct Descriptor {
-    addr: u64,
-    len: u32,
+    addr: U64<LittleEndian>,
+    len: U32<LittleEndian>,
     flags: DescFlags,
-    next: u16,
+    next: U16<LittleEndian>,
 }
 
 impl Descriptor {
@@ -725,7 +725,7 @@ impl Descriptor {
     ) {
         // SAFETY: Safe because our caller promises that the buffer is valid.
         unsafe {
-            self.addr = H::share(buf, direction) as u64;
+            self.addr = (H::share(buf, direction) as u64).into();
         }
         self.len = buf.len().try_into().unwrap();
         self.flags = extra_flags
@@ -764,6 +764,7 @@ impl Descriptor {
 #[repr(transparent)]
 struct DescFlags(u16);
 
+//TODO: check bitflags
 bitflags! {
     impl DescFlags: u16 {
         const NEXT = 1;
@@ -801,8 +802,8 @@ struct UsedRing<const SIZE: usize> {
 #[repr(C)]
 #[derive(Debug)]
 struct UsedElem {
-    id: u32,
-    len: u32,
+    id: U32<LittleEndian>,
+    len: U32<LittleEndian>,
 }
 
 struct InputOutputIter<'a, 'b> {
