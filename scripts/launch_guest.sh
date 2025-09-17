@@ -19,7 +19,7 @@ fi
 
 C_BIT_POS=$("$C_BIT_UTIL" || true)
 COM1_SERIAL="-serial stdio" # console
-COM2_SERIAL="-serial null"  # debug
+COM2_SERIAL="-chardev file,path=edk2.log,id=edk2 -device isa-debugcon,iobase=0x402,chardev=edk2"  # debug
 COM3_SERIAL="-serial null"  # used by hyper-v
 COM4_SERIAL="-serial null"  # used by in-SVSM tests
 QEMU_EXIT_DEVICE=""
