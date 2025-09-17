@@ -70,6 +70,7 @@ impl VirtIOVsockDriver {
 
             let received = dev.recv(server_address, local_port, &mut buffer[first_clean_pos..])?;
             log::info!("[vsock] received: {received}");
+            dev.update_credit(server_address, local_port)?;
 
             first_clean_pos += received;
 
