@@ -2,6 +2,7 @@
 #![no_main]
 
 use userlib::*;
+use coconut_alloc::*;
 
 use core::ptr::{addr_of, addr_of_mut};
 
@@ -27,6 +28,11 @@ declare_main!(main);
 
 fn main() -> u32 {
     println!("COCONUT-SVSM init process starting");
+
+    let allocator = AllocBlock::new();
+    //let result = allocator.alloc(512).unwrap();
+
+    //println!("{result}");
 
     // SAFETY: Single-threaded process, so no data races. Safe to access global
     // mutable data.

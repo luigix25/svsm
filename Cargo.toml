@@ -55,6 +55,7 @@ userlib = { path = "user/lib" }
 userinit = { path = "user/init" }
 release = { path = "release" }
 virtio-drivers = { path = "virtio-drivers" }
+coconut-alloc = { path = "coconut-alloc" }
 
 # crates.io
 aes = "0.8.4"

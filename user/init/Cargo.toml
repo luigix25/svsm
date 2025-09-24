@@ -11,6 +11,7 @@ doctest = false
 
 [dependencies]
 userlib.workspace = true
+coconut-alloc.workspace = true
 
 [lints]
 workspace = true
