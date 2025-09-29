@@ -11,6 +11,8 @@ use crate::{
     testutils::has_qemu_testdev,
 };
 
+use bootlib::platform::SvsmPlatformType;
+
 #[macro_export]
 macro_rules! assert_eq_warn {
     ($left:expr, $right:expr) => {
@@ -92,9 +94,19 @@ pub fn svsm_test_runner(test_cases: &[&test::TestDescAndFn]) {
 fn exit() -> ! {
     if has_qemu_testdev() {
         const QEMU_EXIT_PORT: u16 = 0xf4;
-        current_ghcb()
-            .ioio_out(QEMU_EXIT_PORT, GHCBIOSize::Size32, 0)
-            .unwrap();
+
+        match SVSM_PLATFORM.platform_type() {
+            SvsmPlatformType::Snp => {
+                current_ghcb()
+                    .ioio_out(QEMU_EXIT_PORT, GHCBIOSize::Size32, 0)
+                    .unwrap();
+            }
+            SvsmPlatformType::Native => {
+                SVSM_PLATFORM.get_io_port().outl(QEMU_EXIT_PORT, 0);
+            }
+
+            _ => {}
+        }
     }
     // SAFETY: HLT instruction does not affect memory.
     unsafe {
