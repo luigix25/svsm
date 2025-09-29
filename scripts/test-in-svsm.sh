@@ -47,9 +47,26 @@ dd if=/dev/urandom of="$TEST_DIR/svsm_state.raw" bs=512 count=1024
 test_io $TEST_DIR/pipe.in $TEST_DIR/pipe.out &
 TEST_IO_PID=$!
 
+NOCC=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --nocc)
+      NOCC=--nocc
+      shift
+      ;;
+    *)
+      echo "Invalid parameter $1"
+      exit 1
+      ;;
+  esac
+done
+
+
 $SCRIPT_DIR/launch_guest.sh --igvm $SCRIPT_DIR/../bin/coconut-test-qemu.igvm \
     --state "$TEST_DIR/svsm_state.raw" \
-    --unit-tests $TEST_DIR/pipe || true
+    --unit-tests $TEST_DIR/pipe \
+    $NOCC || true
 
 kill $TEST_IO_PID 2> /dev/null || true
 rm -rf $TEST_DIR

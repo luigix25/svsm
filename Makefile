@@ -47,6 +47,12 @@ else
 BUILD_FW =
 endif
 
+ifeq ($(NOCC),1)
+NOCC=--nocc
+else
+NOCC=
+endif
+
 C_BIT_POS ?= 51
 
 IGVM_FILES = bin/coconut-qemu.igvm bin/coconut-hyperv.igvm bin/coconut-vanadium.igvm
@@ -115,7 +121,7 @@ test:
 test-igvm: bin/coconut-test-qemu.igvm bin/coconut-test-hyperv.igvm bin/coconut-test-vanadium.igvm
 
 test-in-svsm: utils/cbit bin/coconut-test-qemu.igvm $(IGVMMEASUREBIN)
-	./scripts/test-in-svsm.sh
+	./scripts/test-in-svsm.sh $(NOCC)
 
 test-in-hyperv: bin/coconut-test-hyperv.igvm
 
