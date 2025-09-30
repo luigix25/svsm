@@ -6,6 +6,9 @@
 
 use crate::address::{Address, VirtAddr};
 use crate::types::PAGE_SIZE;
+#[cfg(test)]
+use crate::{cpu::percpu::current_ghcb, sev::ghcb::GHCBIOSize, testutils::has_qemu_testdev};
+
 use core::ops::{Add, BitAnd, Not, Sub};
 
 use verus_stub::*;
@@ -85,6 +88,22 @@ pub unsafe fn zero_mem_region(start: VirtAddr, end: VirtAddr) {
     // SAFETY: the safety rules must be upheld by the caller.
     unsafe { start.as_mut_ptr::<u8>().write_bytes(0, count) }
 }
+
+pub const QEMU_EXIT_SUCCESS: u32 = 0x10;
+pub const QEMU_EXIT_FAIL: u32 = 0x0;
+
+#[cfg(test)]
+pub fn qemu_write_exit(value: u32) {
+    if has_qemu_testdev() {
+        const QEMU_EXIT_PORT: u16 = 0xf4;
+        current_ghcb()
+            .ioio_out(QEMU_EXIT_PORT, GHCBIOSize::Size32, value as u64)
+            .unwrap();
+    }
+}
+
+#[cfg(not(test))]
+pub fn qemu_write_exit(_value: u32) {}
 
 /// Obtain bit for a given position
 #[macro_export]
