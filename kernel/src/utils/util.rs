@@ -5,9 +5,15 @@
 // Author: Joerg Roedel <jroedel@suse.de>
 
 use crate::address::{Address, VirtAddr};
+
 use crate::types::PAGE_SIZE;
 #[cfg(test)]
-use crate::{cpu::percpu::current_ghcb, sev::ghcb::GHCBIOSize, testutils::has_qemu_testdev};
+use crate::{
+    cpu::percpu::current_ghcb, platform::SVSM_PLATFORM, sev::ghcb::GHCBIOSize,
+    testutils::has_qemu_testdev,
+};
+#[cfg(test)]
+use bootlib::platform::SvsmPlatformType;
 
 use core::ops::{Add, BitAnd, Not, Sub};
 
@@ -96,9 +102,19 @@ pub const QEMU_EXIT_FAIL: u32 = 0x0;
 pub fn qemu_write_exit(value: u32) {
     if has_qemu_testdev() {
         const QEMU_EXIT_PORT: u16 = 0xf4;
-        current_ghcb()
-            .ioio_out(QEMU_EXIT_PORT, GHCBIOSize::Size32, value as u64)
-            .unwrap();
+
+        match SVSM_PLATFORM.platform_type() {
+            SvsmPlatformType::Snp => {
+                current_ghcb()
+                    .ioio_out(QEMU_EXIT_PORT, GHCBIOSize::Size32, value as u64)
+                    .unwrap();
+            }
+            SvsmPlatformType::Native => {
+                SVSM_PLATFORM.get_io_port().outl(QEMU_EXIT_PORT, value);
+            }
+
+            _ => {}
+        }
     }
 }
 
