@@ -5,6 +5,13 @@ XBUILD_ARGS += -f ${FEATURES}
 endif
 
 FEATURES_TEST ?= vtpm,virtio-drivers
+
+ifeq ($(NOCC),1)
+NOCC=--nocc
+else
+NOCC=
+endif
+
 SVSM_ARGS_TEST += --no-default-features
 ifneq ($(FEATURES_TEST),)
 SVSM_ARGS_TEST += --features ${FEATURES_TEST}
@@ -115,7 +122,7 @@ test:
 test-igvm: bin/coconut-test-qemu.igvm bin/coconut-test-hyperv.igvm bin/coconut-test-vanadium.igvm
 
 test-in-svsm: utils/cbit bin/coconut-test-qemu.igvm $(IGVMMEASUREBIN)
-	./scripts/test-in-svsm.sh
+	./scripts/test-in-svsm.sh $(NOCC)
 
 test-in-hyperv: bin/coconut-test-hyperv.igvm
 
