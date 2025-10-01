@@ -113,7 +113,7 @@ jobs:
         run: sudo apt install -y autoconf autoconf-archive pkg-config build-essential automake
 
       - name: Build test
-        run: NOCC=1 make bin/coconut-test-qemu.igvm
+        run: NOCC=1 FEATURES_TEST=vtpm make bin/coconut-test-qemu.igvm
 
       ########################
 
