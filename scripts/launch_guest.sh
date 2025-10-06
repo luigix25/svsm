@@ -124,7 +124,7 @@ if (( QEMU_MAJOR >= 9 )); then
       echo "Error: Unexpected CGS value '$CGS'"
       exit 1
   esac
-  MACHINE=q35,confidential-guest-support=cgs0,memory-backend=mem0,igvm-cfg=igvm0,accel=$ACCEL
+  MACHINE=q35,confidential-guest-support=cgs0,memory-backend=mem0,igvm-cfg=igvm0,accel=$ACCEL,dumpdtb=qemu.dtb
   MEMORY=memory-backend-memfd,size=8G,id=mem0,share=true,prealloc=false,reserve=false
   IGVM_OBJ="-object igvm-cfg,id=igvm0,file=$IGVM"
 elif (( (QEMU_MAJOR > 8) || ((QEMU_MAJOR == 8) && (QEMU_MINOR >= 2)) )); then
