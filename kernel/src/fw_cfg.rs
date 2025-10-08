@@ -7,6 +7,7 @@
 extern crate alloc;
 
 use crate::error::SvsmError;
+use fdt::Fdt;
 use zerocopy::FromBytes;
 
 use super::io::IOPort;
@@ -186,7 +187,7 @@ impl<'a> FwCfg<'a> {
         T::read_from_bytes(buffer.as_slice()).map_err(|_| FwCfgError::InvalidFormat)
     }
 
-    pub fn get_virtio_mmio_addresses(&self) -> Result<Vec<u64>, SvsmError> {
+    pub fn get_virtio_mmio_addresses_old(&self) -> Result<Vec<u64>, SvsmError> {
         use hardware_info::*;
 
         let mut it = FwCfgFileIterator::new(self, HW_INFO_FILE)?;
@@ -204,4 +205,26 @@ impl<'a> FwCfg<'a> {
         }
         Ok(addresses)
     }
+
+    pub fn get_virtio_mmio_addresses(&self) -> Result<Vec<u64>, SvsmError> {
+
+        let mut addresses: Vec<u64> = Vec::<u64>::new();
+
+        let file: FwCfgFile = self.file_selector("etc/fdt")?;
+        self.select(file.selector);
+
+        let mut prova: [u8; 600] =[0; 600];
+
+        self.read_bytes(prova.as_mut_slice());
+
+        let fdt = Fdt::new(prova.as_slice()).unwrap();
+        for node in fdt.find_all_nodes("/virtio_mmio") {
+            let addr_string = node.name.split("@").last().unwrap();
+            let addr_number = u64::from_str_radix(addr_string, 16).unwrap();
+            addresses.push(addr_number);
+        }
+
+        Ok(addresses)
+    }
+
 }
