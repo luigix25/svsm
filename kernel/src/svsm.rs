@@ -60,6 +60,8 @@ use svsm::mm::validate::{init_valid_bitmap_ptr, migrate_valid_bitmap};
 use alloc::string::String;
 use release::COCONUT_VERSION;
 
+use fdt::Fdt;
+
 #[cfg(feature = "attest")]
 use kbs_types::Tee;
 
@@ -327,6 +329,9 @@ pub fn svsm_main(cpu_index: usize) {
     if (launch_info.vtom != 0) && (launch_info.vtom != igvm_params.get_vtom()) {
         panic!("Launch VTOM does not match VTOM from IGVM parameters");
     }
+
+    let dt = Fdt::new(igvm_params.igvm_device_tree.unwrap()).unwrap();
+    log::info!("{:?}", dt);
 
     let config = SvsmConfig::new(*SVSM_PLATFORM, igvm_params);
 
