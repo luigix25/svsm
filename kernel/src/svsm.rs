@@ -395,7 +395,10 @@ pub fn svsm_main(cpu_index: usize) {
         let mut stream = VsockStream::connect(1234, 12345, 2).unwrap();
         let _written_bytes = stream.write(b"buf").unwrap();
         let mut buffer: [u8; 4] = [0; 4];
-        let _read_bytes = stream.read(&mut buffer).unwrap();
+        let read_bytes = stream.read(&mut buffer).unwrap();
+        log::info!("Ricevuti: {read_bytes}");
+
+        stream.read(&mut buffer).unwrap();
 
         let string = String::from_utf8_lossy(&buffer);
         log::info!("Received: {string}");

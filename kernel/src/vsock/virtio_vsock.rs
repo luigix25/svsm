@@ -70,6 +70,10 @@ impl VirtIOVsockDriver {
 
             let received = dev.recv(server_address, local_port, &mut buffer[first_clean_pos..])?;
             log::info!("[vsock] received: {received}");
+            if received == 0 {
+                break;
+            }
+
             dev.update_credit(server_address, local_port)?;
 
             first_clean_pos += received;
@@ -81,7 +85,7 @@ impl VirtIOVsockDriver {
             }
         }
 
-        Ok(buffer.len())
+        Ok(first_clean_pos)
     }
 
     pub fn send(
