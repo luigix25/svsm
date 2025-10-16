@@ -3,11 +3,9 @@ use log::info;
 use test::ShouldPanic;
 
 use crate::{
-    cpu::percpu::current_ghcb,
     locking::{LockGuard, SpinLock},
     platform::SVSM_PLATFORM,
     serial::SerialPort,
-    sev::ghcb::GHCBIOSize,
     testutils::has_qemu_testdev,
 };
 
@@ -42,6 +40,8 @@ pub enum IORequest {
     GetLaunchMeasurement = 0x01,
     /// Virtio-blk tests: Get Sha256 hash of the svsm state disk image
     GetStateImageSha256 = 0x02,
+    /// Virtio-vsock tests: Ask host to start a vsock server
+    StartVsockServer = 0x03,
 }
 
 /// Return the serial port to communicate with the host for a given request
@@ -90,15 +90,26 @@ pub fn svsm_test_runner(test_cases: &[&test::TestDescAndFn]) {
 }
 
 fn exit() -> ! {
-    if has_qemu_testdev() {
-        const QEMU_EXIT_PORT: u16 = 0xf4;
-        current_ghcb()
-            .ioio_out(QEMU_EXIT_PORT, GHCBIOSize::Size32, 0)
-            .unwrap();
-    }
+    qemu_write_exit(QEMUExitValue::Success);
     // SAFETY: HLT instruction does not affect memory.
     unsafe {
         asm!("hlt");
     }
     unreachable!();
+}
+
+#[repr(u32)]
+#[derive(Debug)]
+pub enum QEMUExitValue {
+    Success = 0x10,
+    Fail = 0x11,
+}
+
+pub fn qemu_write_exit(value: QEMUExitValue) {
+    if has_qemu_testdev() {
+        const QEMU_EXIT_PORT: u16 = 0xf4;
+        SVSM_PLATFORM
+            .get_io_port()
+            .outl(QEMU_EXIT_PORT, value as u32);
+    }
 }

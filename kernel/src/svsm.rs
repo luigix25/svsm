@@ -63,6 +63,9 @@ use release::COCONUT_VERSION;
 #[cfg(feature = "attest")]
 use kbs_types::Tee;
 
+#[cfg(feature = "vsock")]
+use svsm::vsock::virtio_vsock::VsockStream;
+
 extern "C" {
     static bsp_stack: u8;
     static bsp_stack_end: u8;
@@ -385,6 +388,22 @@ pub fn svsm_main(cpu_index: usize) {
         Err(e) => log::info!("Failed to launch /init: {e:?}"),
     }
 
+    #[cfg(feature = "vsock")]
+    {
+        use svsm::io::{Read, Write};
+
+        let mut stream = VsockStream::connect(1234, 12345, 2).unwrap();
+        let _written_bytes = stream.write(b"buf").unwrap();
+        let mut buffer: [u8; 4] = [0; 4];
+        let read_bytes = stream.read(&mut buffer).unwrap();
+        log::info!("Ricevuti: {read_bytes}");
+
+        stream.read(&mut buffer).unwrap();
+
+        let string = String::from_utf8_lossy(&buffer);
+        log::info!("Received: {string}");
+    }
+
     // Start request processing on this CPU if required.
     if SVSM_PLATFORM.start_svsm_request_loop() {
         start_kernel_task(
@@ -419,6 +438,8 @@ fn panic(info: &PanicInfo<'_>) -> ! {
 
     loop {
         debug_break();
+        #[cfg(all(test, test_in_svsm))]
+        crate::testing::qemu_write_exit(crate::testing::QEMUExitValue::Fail);
         platform::halt();
     }
 }
