@@ -4,7 +4,7 @@
 //
 // Author: Luigi Leonardi <leonardi@redhat.com>
 
-use crate::error::SvsmError;
+use virtio_drivers::Error;
 
 pub trait VsockDriver: Sync + Send {
     fn connect(&self, remote_cid: u64, local_port: u32, remote_port: u32) -> Result<(), Error>;
