@@ -52,6 +52,8 @@ use svsm::task::schedule_init;
 use svsm::task::{exec_user, start_kernel_task, KernelThreadStartInfo};
 use svsm::types::PAGE_SIZE;
 use svsm::utils::{immut_after_init::ImmutAfterInitCell, zero_mem_region, MemoryRegion};
+#[cfg(feature = "virtio-drivers")]
+use svsm::virtio::devices::virtio_mmio_init;
 #[cfg(all(feature = "vtpm", not(test)))]
 use svsm::vtpm::vtpm_init;
 
@@ -62,6 +64,9 @@ use release::COCONUT_VERSION;
 
 #[cfg(feature = "attest")]
 use kbs_types::Tee;
+
+#[cfg(feature = "vsock")]
+use svsm::vsock::{stream::VsockStream, virtio_vsock::initialize_vsock};
 
 extern "C" {
     static bsp_stack: u8;
@@ -351,6 +356,12 @@ pub fn svsm_main(cpu_index: usize) {
         panic!("Failed to prepare guest FW: {e:#?}");
     }
 
+    #[cfg(feature = "virtio-drivers")]
+    virtio_mmio_init();
+
+    #[cfg(feature = "vsock")]
+    initialize_vsock();
+
     #[cfg(feature = "attest")]
     {
         let mut proxy = AttestationDriver::try_from(Tee::Snp).unwrap();
@@ -383,6 +394,26 @@ pub fn svsm_main(cpu_index: usize) {
     match exec_user("/init", opendir("/").expect("Failed to find FS root")) {
         Ok(_) => (),
         Err(e) => log::info!("Failed to launch /init: {e:?}"),
+    }
+
+    #[cfg(feature = "vsock")]
+    {
+        use svsm::io::{Read, Write};
+
+        let mut stream = VsockStream::connect(1234, 12345, 2).unwrap();
+        let _written_bytes = stream.write(b"buf").unwrap();
+        let mut buffer: [u8; 4] = [0; 4];
+        let mut read_bytes = stream.read(&mut buffer).unwrap();
+        log::info!("[main] Ricevuti: {read_bytes}");
+
+        let string = String::from_utf8_lossy(&buffer);
+        log::info!("Received: {string}");
+
+        read_bytes = stream.read(&mut buffer).unwrap();
+        log::info!("[main] Ricevuti: {read_bytes}");
+
+        read_bytes = stream.read(&mut buffer).unwrap();
+        log::info!("[main] Ricevuti: {read_bytes}");
     }
 
     // Start request processing on this CPU if required.
