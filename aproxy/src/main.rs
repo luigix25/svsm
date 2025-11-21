@@ -27,15 +27,11 @@ struct Args {
     backend: backend::Protocol,
 
     /// UNIX domain socket path to the SVSM serial port
-    #[clap(
-        long,
-        conflicts_with = "vsock_port",
-        required_unless_present("vsock_port")
-    )]
+    #[clap(long, group = "transport", required = true)]
     unix: Option<String>,
 
     /// vsock port used by SVSM for attestation
-    #[clap(long, conflicts_with_all = ["unix", "force"], required_unless_present("unix"))]
+    #[clap(long, group = "transport", required = true, conflicts_with = "force")]
     vsock_port: Option<u32>,
 
     /// Force Unix domain socket removal before bind
