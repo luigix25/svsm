@@ -36,6 +36,7 @@ pub struct IgvmParams<'a> {
     igvm_param_block: &'a IgvmParamBlock,
     igvm_param_page: &'a IgvmParamPage,
     igvm_memory_map: &'a IgvmMemoryMap,
+    igvm_device_tree: Option<&'a [u8]>,
     igvm_madt: Option<&'a [u8]>,
     igvm_guest_context: Option<&'a IgvmGuestContext>,
 }
@@ -47,6 +48,18 @@ impl IgvmParams<'_> {
         let param_page = Self::try_aligned_ref::<IgvmParamPage>(param_page_address)?;
         let memory_map_address = addr + param_block.memory_map_offset as usize;
         let memory_map = Self::try_aligned_ref::<IgvmMemoryMap>(memory_map_address)?;
+        let device_tree_address = addr + param_block.dt_offset as usize;
+        let device_tree = if param_block.dt_size != 0 {
+            // SAFETY: the parameter block correctly describes the bounds of the DT.
+            unsafe {
+                Some(slice::from_raw_parts(
+                    device_tree_address.as_ptr::<u8>(),
+                    param_block.dt_size as usize,
+                ))
+            }
+        } else {
+            None
+        };
         let madt_address = addr + param_block.madt_offset as usize;
         let madt = if param_block.madt_size != 0 {
             // SAFETY: the parameter block correctly describes the bounds of the
@@ -71,6 +84,7 @@ impl IgvmParams<'_> {
             igvm_param_block: param_block,
             igvm_param_page: param_page,
             igvm_memory_map: memory_map,
+            igvm_device_tree: device_tree,
             igvm_madt: madt,
             igvm_guest_context: guest_context,
         })
