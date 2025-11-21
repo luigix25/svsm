@@ -36,7 +36,7 @@ pub struct IgvmParams<'a> {
     igvm_param_block: &'a IgvmParamBlock,
     igvm_param_page: &'a IgvmParamPage,
     igvm_memory_map: &'a IgvmMemoryMap,
-    igvm_device_tree: Option<&'a [u8]>,
+    pub igvm_device_tree: Option<&'a [u8]>,
     igvm_madt: Option<&'a [u8]>,
     igvm_guest_context: Option<&'a IgvmGuestContext>,
 }
