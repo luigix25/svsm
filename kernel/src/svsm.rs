@@ -68,6 +68,9 @@ use release::COCONUT_VERSION;
 #[cfg(feature = "attest")]
 use kbs_types::Tee;
 
+#[cfg(feature = "vsock")]
+use svsm::vsock::stream::VsockStream;
+
 extern "C" {
     static bsp_stack: u64;
     static bsp_stack_end: u64;
@@ -169,6 +172,12 @@ fn initialize_virtio_mmio() -> Result<(), SvsmError> {
     {
         use svsm::block::virtio_blk::initialize_block;
         initialize_block(&mut slots)?;
+    }
+
+    #[cfg(feature = "vsock")]
+    {
+        use svsm::vsock::virtio_vsock::initialize_vsock;
+        initialize_vsock(&mut slots)?;
     }
 
     Ok(())
@@ -464,6 +473,26 @@ fn svsm_init(launch_info: &KernelLaunchInfo) {
         match exec_user("/init", opendir("/").expect("Failed to find FS root")) {
             Ok(_) => (),
             Err(e) => log::info!("Failed to launch /init: {e:?}"),
+        }
+
+        #[cfg(feature = "vsock")]
+        {
+            use svsm::io::{Read, Write};
+
+            let mut stream = VsockStream::connect(12345, 2).unwrap();
+            let _written_bytes = stream.write(b"buf").unwrap();
+            let mut buffer: [u8; 4] = [0; 4];
+            let mut read_bytes = stream.read(&mut buffer).unwrap();
+            log::info!("[main] Ricevuti: {read_bytes}");
+
+            let string = String::from_utf8_lossy(&buffer);
+            log::info!("Received: {string}");
+
+            read_bytes = stream.read(&mut buffer).unwrap();
+            log::info!("[main] Ricevuti: {read_bytes}");
+
+            read_bytes = stream.read(&mut buffer).unwrap();
+            log::info!("[main] Ricevuti: {read_bytes}");
         }
 
         // Start request processing on this CPU if required.
