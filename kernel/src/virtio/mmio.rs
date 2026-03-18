@@ -7,15 +7,14 @@
 extern crate alloc;
 use alloc::vec::Vec;
 use core::ptr::NonNull;
+use fdt::Fdt;
 
 use virtio_drivers::transport::{DeviceType, Transport, mmio::MmioTransport};
 
 use crate::address::PhysAddr;
 use crate::boot_params::BootParams;
-use crate::fw_cfg::FwCfg;
 use crate::mm::{GlobalRangeGuard, map_global_range_4k_shared, pagetable::PTEntryFlags};
-use crate::platform::SVSM_PLATFORM;
-use crate::types::PAGE_SIZE;
+use crate::types::{PAGE_SIZE, SVSM_VMPL};
 use crate::virtio::hal::{SvsmHal, virtio_init};
 
 #[derive(Debug)]
@@ -29,9 +28,28 @@ pub struct MmioSlots {
     slots: Vec<MmioSlot>,
 }
 
+/// Parses the device tree to extract base addresses of virtio-MMIO devices
+/// assigned to the SVSM plane.
+fn get_virtio_mmio_addresses(device_tree: Fdt<'_>) -> Vec<u64> {
+    device_tree
+        .find_all_nodes("/virtio_mmio")
+        .filter(|dev| {
+            dev.compatible()
+                .is_some_and(|c| c.all().any(|c| c == "virtio,mmio"))
+        })
+        .filter(|dev| {
+            dev.property("plane")
+                .and_then(|p| p.as_usize())
+                .is_some_and(|plane| plane == SVSM_VMPL)
+        })
+        .filter_map(|dev| dev.reg()?.next())
+        .map(|reg| reg.starting_address as u64)
+        .collect()
+}
+
 /// Probes and enumerates all virtio-MMIO devices available in the system.
 ///
-/// This function queries the fw_cfg interface to discover virtio-MMIO device
+/// This function parses the device tree to discover virtio-MMIO device
 /// addresses and maps their MMIO regions.
 ///
 /// # Usage
@@ -44,22 +62,24 @@ pub struct MmioSlots {
 /// # Returns
 ///
 /// Returns an [`MmioSlots`] collection containing all discovered virtio-MMIO devices.
-/// Returns an empty collection if no devices are found or if the fw_cfg interface
+/// Returns an empty collection if no devices are found or if the device tree
 /// is unavailable.
 pub fn probe_mmio_slots(boot_params: &BootParams<'_>) -> MmioSlots {
-    // Virtio MMIO addresses are discovered via fw_cfg, so skip probing
+    // Virtio MMIO addresses are discovered via device tree, so skip probing
     // if it is not present.
-    if !boot_params.has_fw_cfg_port() {
-        return MmioSlots::default();
-    }
-
-    virtio_init();
-
-    let cfg = FwCfg::new(SVSM_PLATFORM.get_io_port());
-    let Ok(dev) = cfg.get_virtio_mmio_addresses() else {
+    let Some(device_tree) = boot_params.get_device_tree() else {
+        log::warn!("MmioSlots: No device tree found.");
         return MmioSlots::default();
     };
 
+    virtio_init();
+
+    let Ok(parsed_dt) = Fdt::new(device_tree) else {
+        log::warn!("MmioSlots: Failed to parse device tree");
+        return MmioSlots::default();
+    };
+
+    let dev = get_virtio_mmio_addresses(parsed_dt);
     let mut slots = Vec::with_capacity(dev.len());
 
     for addr in dev {
