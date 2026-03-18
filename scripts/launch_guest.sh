@@ -34,6 +34,10 @@ STATE_DEVICE=""
 VSOCK_DEVICE=""
 VIRTIO=0
 
+# Must match SVSM_VMPL and GUEST_VMPL in kernel/src/types.rs
+SVSM_VMPL=0
+GUEST_VMPL=2
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     -q|--qemu)
@@ -54,7 +58,7 @@ while [[ $# -gt 0 ]]; do
     --state)
       VIRTIO=1
       STATE_DEVICE+="-drive file=$2,format=raw,if=none,id=svsm_storage,cache=none "
-      STATE_DEVICE+="-device virtio-blk-device,drive=svsm_storage "
+      STATE_DEVICE+="-device virtio-blk-device,drive=svsm_storage,plane=$SVSM_VMPL "
       shift
       shift
       ;;
@@ -89,7 +93,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --vsock)
       VIRTIO=1
-      VSOCK_DEVICE="-device vhost-vsock-device,guest-cid=$2 "
+      VSOCK_DEVICE="-device vhost-vsock-device,guest-cid=$2,plane=$SVSM_VMPL "
       shift
       shift
       ;;
@@ -147,7 +151,7 @@ case "$CGS" in
     echo "Error: Unexpected CGS value '$CGS'"
     exit 1
 esac
-MACHINE=q35,memory-backend=mem0,igvm-cfg=igvm0,accel=$ACCEL
+MACHINE=q35,memory-backend=mem0,igvm-cfg=igvm0,accel=$ACCEL,device-plane=$GUEST_VMPL
 [ -n "$SNP_GUEST" ] && MACHINE+=",confidential-guest-support=cgs0"
 [ -n "$VIRTIO_ENABLE" ] && MACHINE+=",${VIRTIO_ENABLE}"
 
