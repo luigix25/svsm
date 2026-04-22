@@ -139,5 +139,6 @@ jobs:
 
       - name: Run test-in-svsm in QEMU
         run: |
-          QEMU=./citests/qemu/bin/qemu-system-x86_64 scripts/test-qemu-nocc-svsm.sh
+          VSOCK_PORT=$(( ${{ github.event.pull_request.number }} + 1024 ))
+          QEMU=./citests/qemu/bin/qemu-system-x86_64 scripts/test-qemu-nocc-svsm.sh --vsock-port $VSOCK_PORT
 

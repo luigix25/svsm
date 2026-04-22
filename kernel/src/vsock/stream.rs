@@ -155,6 +155,9 @@ mod tests {
 
         let port = u32::from_be_bytes(port_bytes);
         assert_ne!(port, VMADDR_PORT_ANY, "host failed to start vsock server");
+
+        log::info!("vsock port:{}",port);
+
         port
     }
 
