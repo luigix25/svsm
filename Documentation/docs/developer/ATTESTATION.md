@@ -287,7 +287,7 @@ SEV-SNP machine with an SVSM-enabled kernel.
 
      * `--url http://0.0.0.0:8080`: The attestation server is running at
        `http://0.0.0.0:8080`.
-     * `--protocol kbs-test`: The attestation server communicates via the KBS
+     * `--protocol kbs`: The attestation server communicates via the KBS
        protocol, configure the backend to use the KBS protocol.
      * `--unix /tmp/svsm-proxy.sock`: Listen for messages from SVSM on a socket
        created in file `/tmp/svsm-proxy-sock`.
