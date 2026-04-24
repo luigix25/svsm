@@ -66,6 +66,9 @@ impl VsockStream {
     /// - No free local ports are available
     /// - The connection fails
     pub fn connect(remote_port: u32, remote_cid: u32) -> Result<Self, SvsmError> {
+        VSOCK_DEVICE
+            .try_get_inner()
+            .map_err(|_| SvsmError::Vsock(VsockError::DriverError))?;
         let local_port = VSOCK_DEVICE.get_first_free_port()?;
         VSOCK_DEVICE.connect(remote_cid, local_port, remote_port)?;
 
