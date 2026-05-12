@@ -130,9 +130,9 @@ fi
 case "$CGS" in
   nocc)
     SNP_GUEST=""
-    CPU=max,smep=on
-    ACCEL=tcg
     if (( QEMU_MAJOR < 11 )); then
+      CPU=max,smep=on
+      ACCEL=tcg
       SNP_GUEST="-object nocc,id=cgs0"
     fi
     ;;
