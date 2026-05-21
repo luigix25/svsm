@@ -32,7 +32,7 @@ pub struct MmioSlots {
 /// assigned to the SVSM plane.
 fn get_virtio_mmio_addresses(device_tree: Fdt<'_>) -> Vec<u64> {
     device_tree
-        .find_all_nodes("/virtio_mmio")
+        .all_nodes()
         .filter(|dev| {
             dev.compatible()
                 .is_some_and(|c| c.all().any(|c| c == "virtio,mmio"))
