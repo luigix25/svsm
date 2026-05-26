@@ -14,7 +14,8 @@ use virtio_drivers::transport::{DeviceType, Transport, mmio::MmioTransport};
 use crate::address::PhysAddr;
 use crate::boot_params::BootParams;
 use crate::mm::{GlobalRangeGuard, map_global_range_4k_shared, pagetable::PTEntryFlags};
-use crate::types::{PAGE_SIZE, SVSM_VMPL};
+use crate::types::SVSM_VMPL;
+use crate::utils::round_to_pages;
 use crate::virtio::hal::{SvsmHal, virtio_init};
 
 #[derive(Debug)]
@@ -28,9 +29,15 @@ pub struct MmioSlots {
     slots: Vec<MmioSlot>,
 }
 
-/// Parses the device tree to extract base addresses of virtio-MMIO devices
-/// assigned to the SVSM plane.
-fn get_virtio_mmio_addresses(device_tree: Fdt<'_>) -> Vec<u64> {
+#[derive(Debug)]
+struct Slot {
+    address: usize,
+    size: usize,
+}
+
+/// Parses the device tree to extract base addresses and size of
+/// virtio-MMIO devices assigned to the SVSM plane.
+fn get_virtio_mmio_addresses(device_tree: Fdt<'_>) -> Vec<Slot> {
     device_tree
         .all_nodes()
         .filter(|dev| {
@@ -42,8 +49,15 @@ fn get_virtio_mmio_addresses(device_tree: Fdt<'_>) -> Vec<u64> {
                 .and_then(|p| p.as_usize())
                 .is_some_and(|plane| plane == SVSM_VMPL)
         })
-        .filter_map(|dev| dev.reg()?.next())
-        .map(|reg| reg.starting_address as u64)
+        .map(|element| {
+            let mut reg = element.reg().unwrap();
+            let reg_value = reg.next().unwrap();
+
+            Slot {
+                address: reg_value.starting_address as usize,
+                size: reg_value.size.unwrap(),
+            }
+        })
         .collect()
 }
 
@@ -81,11 +95,13 @@ pub fn probe_mmio_slots(boot_params: &BootParams<'_>) -> MmioSlots {
     let dev = get_virtio_mmio_addresses(parsed_dt);
     let mut slots = Vec::with_capacity(dev.len());
 
-    for addr in dev {
-        let phys_addr = PhysAddr::from(addr);
+    for slot in dev {
+        let phys_addr = PhysAddr::from(slot.address);
 
-        let Ok(mem) = map_global_range_4k_shared(phys_addr, PAGE_SIZE, PTEntryFlags::data()) else {
-            log::warn!("MmioSlots: Failed to map MMIO region at {addr:x}");
+        let Ok(mem) =
+            map_global_range_4k_shared(phys_addr, round_to_pages(slot.size), PTEntryFlags::data())
+        else {
+            log::warn!("MmioSlots: Failed to map MMIO region at {:x}", slot.address);
             continue;
         };
 
@@ -96,11 +112,15 @@ pub fn probe_mmio_slots(boot_params: &BootParams<'_>) -> MmioSlots {
         // The memory region has the same lifetime of the MmioSlot structure which will be consumed by the driver.
         let Ok(transport) = (unsafe { MmioTransport::<SvsmHal>::new(header) }) else {
             // Currently QEMU advertises _all_ slots, regardless they are empty or not.
-            log::debug!("MmioSlots: {addr:x} empty");
+            log::debug!("MmioSlots: {:x} empty", slot.address);
             continue;
         };
 
-        log::info!("MmioSlots: Found {:?} at {addr:x}", transport.device_type());
+        log::info!(
+            "MmioSlots: Found {:?} at {:x}",
+            transport.device_type(),
+            slot.address
+        );
 
         let slot_type = MmioSlot {
             mmio_range: mem,
