@@ -10,10 +10,11 @@ extern crate alloc;
 use crate::{
     error::SvsmError,
     greq::{pld_report::*, services::get_regular_report},
-    io::{DEFAULT_IO_DRIVER, Read, Write},
-    serial::SerialPort,
+    io::{Read, Write},
     utils::vec::{try_to_vec, vec_sized},
 };
+#[cfg(not(all(feature = "vsock", feature = "no-serial-fallback")))]
+use crate::{io::DEFAULT_IO_DRIVER, serial::SerialPort};
 #[cfg(feature = "vsock")]
 use crate::{vsock::VMADDR_CID_HOST, vsock::stream::VsockStream};
 use aes_gcm::{AeadInPlace, Aes256Gcm, KeyInit, Nonce, aead::generic_array::GenericArray};
@@ -35,12 +36,16 @@ use serde::Serialize;
 use sha2::{Digest, Sha512};
 use zerocopy::{FromBytes, IntoBytes};
 
+#[cfg(feature = "vsock")]
+const ATTEST_DEFAULT_VSOCK_PORT: u32 = 1995;
+#[cfg(not(all(feature = "vsock", feature = "no-serial-fallback")))]
 // TODO: Make the IO port configurable/discoverable or drop the support entirely.
 const ATTEST_DEFAULT_SERIAL_IO_ADDR: u16 = 0x3e8; // COM3
 
 enum Transport {
     #[cfg(feature = "vsock")]
     Vsock(VsockStream),
+    #[cfg(not(all(feature = "vsock", feature = "no-serial-fallback")))]
     Serial(SerialPort<'static>),
 }
 
@@ -51,6 +56,7 @@ impl Read for Transport {
         match self {
             #[cfg(feature = "vsock")]
             Transport::Vsock(vsock) => vsock.read(buf),
+            #[cfg(not(all(feature = "vsock", feature = "no-serial-fallback")))]
             Transport::Serial(serial) => serial.read(buf),
         }
     }
@@ -63,6 +69,7 @@ impl Write for Transport {
         match self {
             #[cfg(feature = "vsock")]
             Transport::Vsock(vsock) => vsock.write(buf),
+            #[cfg(not(all(feature = "vsock", feature = "no-serial-fallback")))]
             Transport::Serial(serial) => serial.write(buf),
         }
     }
@@ -76,10 +83,16 @@ impl Transport {
             Err(e) => {
                 log::warn!(
                     "Failed to connect to attestation proxy on vsock port \
-                     {ATTEST_DEFAULT_VSOCK_PORT}: {e:?}. \
-                     Falling back to serial port transport.",
+                     {ATTEST_DEFAULT_VSOCK_PORT}: {e:?}."
                 );
-                create_serial_transport()
+
+                #[cfg(not(feature = "no-serial-fallback"))]
+                {
+                    log::warn!("Falling back to serial port transport.");
+                    create_serial_transport()
+                }
+                #[cfg(feature = "no-serial-fallback")]
+                Err(e)
             }
         }
     }
@@ -90,6 +103,7 @@ impl Transport {
     }
 }
 
+#[cfg(not(all(feature = "vsock", feature = "no-serial-fallback")))]
 fn create_serial_transport() -> Result<Transport, SvsmError> {
     let sp = SerialPort::new(&DEFAULT_IO_DRIVER, ATTEST_DEFAULT_SERIAL_IO_ADDR);
     sp.init();
