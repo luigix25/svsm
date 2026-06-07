@@ -7,15 +7,15 @@
 extern crate alloc;
 use alloc::vec::Vec;
 use core::ptr::NonNull;
+use fdt::Fdt;
 
 use virtio_drivers::transport::{DeviceType, Transport, mmio::MmioTransport};
 
 use crate::address::PhysAddr;
 use crate::boot_params::BootParams;
-use crate::fw_cfg::FwCfg;
 use crate::mm::{GlobalRangeGuard, map_global_range_4k_shared, pagetable::PTEntryFlags};
-use crate::platform::SVSM_PLATFORM;
-use crate::types::PAGE_SIZE;
+use crate::types::SVSM_VMPL;
+use crate::utils::round_to_pages;
 use crate::virtio::hal::{SvsmHal, virtio_init};
 
 #[derive(Debug)]
@@ -29,9 +29,41 @@ pub struct MmioSlots {
     slots: Vec<MmioSlot>,
 }
 
+#[derive(Debug)]
+struct Slot {
+    address: usize,
+    size: usize,
+}
+
+/// Parses the device tree to extract base addresses and size of
+/// virtio-MMIO devices assigned to the SVSM plane.
+fn get_virtio_mmio_addresses(device_tree: Fdt<'_>) -> Vec<Slot> {
+    device_tree
+        .all_nodes()
+        .filter(|dev| {
+            dev.compatible()
+                .is_some_and(|c| c.all().any(|c| c == "virtio,mmio"))
+        })
+        .filter(|dev| {
+            dev.property("plane")
+                .and_then(|p| p.as_usize())
+                .is_some_and(|plane| plane == SVSM_VMPL)
+        })
+        .map(|element| {
+            let mut reg = element.reg().unwrap();
+            let reg_value = reg.next().unwrap();
+
+            Slot {
+                address: reg_value.starting_address as usize,
+                size: reg_value.size.unwrap(),
+            }
+        })
+        .collect()
+}
+
 /// Probes and enumerates all virtio-MMIO devices available in the system.
 ///
-/// This function queries the fw_cfg interface to discover virtio-MMIO device
+/// This function parses the device tree to discover virtio-MMIO device
 /// addresses and maps their MMIO regions.
 ///
 /// # Usage
@@ -44,29 +76,32 @@ pub struct MmioSlots {
 /// # Returns
 ///
 /// Returns an [`MmioSlots`] collection containing all discovered virtio-MMIO devices.
-/// Returns an empty collection if no devices are found or if the fw_cfg interface
+/// Returns an empty collection if no devices are found or if the device tree
 /// is unavailable.
 pub fn probe_mmio_slots(boot_params: &BootParams<'_>) -> MmioSlots {
-    // Virtio MMIO addresses are discovered via fw_cfg, so skip probing
+    // Virtio MMIO addresses are discovered via device tree, so skip probing
     // if it is not present.
-    if !boot_params.has_fw_cfg_port() {
-        return MmioSlots::default();
-    }
-
-    virtio_init();
-
-    let cfg = FwCfg::new(SVSM_PLATFORM.get_io_port());
-    let Ok(dev) = cfg.get_virtio_mmio_addresses() else {
+    let Some(device_tree) = boot_params.get_device_tree() else {
         return MmioSlots::default();
     };
 
+    virtio_init();
+
+    let Ok(parsed_dt) = Fdt::new(device_tree) else {
+        log::warn!("MmioSlots: Failed to parse device tree");
+        return MmioSlots::default();
+    };
+
+    let dev = get_virtio_mmio_addresses(parsed_dt);
     let mut slots = Vec::with_capacity(dev.len());
 
-    for addr in dev {
-        let phys_addr = PhysAddr::from(addr);
+    for slot in dev {
+        let phys_addr = PhysAddr::from(slot.address);
 
-        let Ok(mem) = map_global_range_4k_shared(phys_addr, PAGE_SIZE, PTEntryFlags::data()) else {
-            log::warn!("MmioSlots: Failed to map MMIO region at {addr:x}");
+        let Ok(mem) =
+            map_global_range_4k_shared(phys_addr, round_to_pages(slot.size), PTEntryFlags::data())
+        else {
+            log::warn!("MmioSlots: Failed to map MMIO region at {:x}", slot.address);
             continue;
         };
 
@@ -77,11 +112,15 @@ pub fn probe_mmio_slots(boot_params: &BootParams<'_>) -> MmioSlots {
         // The memory region has the same lifetime of the MmioSlot structure which will be consumed by the driver.
         let Ok(transport) = (unsafe { MmioTransport::<SvsmHal>::new(header) }) else {
             // Currently QEMU advertises _all_ slots, regardless they are empty or not.
-            log::debug!("MmioSlots: {addr:x} empty");
+            log::debug!("MmioSlots: {:x} empty", slot.address);
             continue;
         };
 
-        log::info!("MmioSlots: Found {:?} at {addr:x}", transport.device_type());
+        log::info!(
+            "MmioSlots: Found {:?} at {:x}",
+            transport.device_type(),
+            slot.address
+        );
 
         let slot_type = MmioSlot {
             mmio_range: mem,
