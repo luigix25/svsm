@@ -69,7 +69,7 @@ bitflags = "2.6"
 clap = { version = "4.4.14", default-features = false }
 igvm = { version = "0.4.0", default-features = false }
 igvm_defs = { version = "0.4.0", default-features = false }
-intrusive-collections = "0.9.6"
+intrusive-collections = "0.10.0"
 log = "0.4.17"
 p384 = { version = "0.13.0" }
 rustc-demangle = { version = "0.1.26" }
