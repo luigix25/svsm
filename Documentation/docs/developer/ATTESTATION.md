@@ -255,6 +255,15 @@ SVSM communicates with the attestation proxy using one of two transport methods:
   SVSM falls back to the COM3 serial port if the vsock connection fails. This
   is intended for testing purposes only.
 
+If the vsock transport cannot be set up -- either because no vsock device is
+available to SVSM, or because a connection to the host proxy cannot be
+established -- and the `attest-serial` fallback is not enabled, SVSM logs a
+warning and skips attestation and persistence initialization entirely, rather
+than panicking. When `attest-serial` is enabled, this vsock failure instead
+triggers the serial port fallback described above. Any other failure while
+initializing the attestation driver (e.g. an unsupported TEE or a
+cryptographic error) is still treated as fatal and causes a panic.
+
 ## Known Limitations
 
 The attestation services in SVSM are **experimental** at present and have the
