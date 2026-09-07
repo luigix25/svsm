@@ -5,9 +5,9 @@ fn main() {
     // Extra cfgs
     println!("cargo::rustc-check-cfg=cfg(test_in_svsm)");
 
-    // uapi_tester
-    println!("cargo::rustc-link-arg-bin=uapi_tester=-no-pie");
-    println!("cargo::rustc-link-arg-bin=uapi_tester=-nostdlib");
+    // uapi-tester
+    println!("cargo::rustc-link-arg-bin=uapi-tester=-no-pie");
+    println!("cargo::rustc-link-arg-bin=uapi-tester=-nostdlib");
 
     // Extra linker args for tests.
     println!("cargo::rerun-if-env-changed=LINK_TEST");

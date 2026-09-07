@@ -20,7 +20,7 @@ test = false
 doc = false
 
 [[bin]]
-name = "page_alloc"
+name = "page-alloc"
 path = "fuzz_targets/page_alloc.rs"
 test = false
 doc = false
@@ -38,7 +38,7 @@ test = false
 doc = false
 
 [[bin]]
-name = "bitmap_allocator"
+name = "bitmap-allocator"
 path = "fuzz_targets/bitmap_allocator.rs"
 test = false
 doc = false
