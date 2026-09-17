@@ -7,10 +7,12 @@
 
 extern crate alloc;
 
+#[cfg(not(all(test, test_in_svsm)))]
+use crate::greq::services::get_regular_report;
 use crate::{
     crypto::{SecretSlice, get_svsm_rng},
     error::SvsmError,
-    greq::{pld_report::*, services::get_regular_report},
+    greq::pld_report::*,
     io::{Read, Write},
     utils::vec::{try_to_vec, vec_sized},
 };
@@ -29,6 +31,7 @@ use kbs_types::Tee;
 use libaproxy::*;
 use serde::Serialize;
 use sha2::{Digest, Sha512};
+#[cfg(not(all(test, test_in_svsm)))]
 use zerocopy::{FromBytes, IntoBytes};
 
 #[cfg(feature = "attest-serial")]
@@ -333,6 +336,7 @@ fn sc_key_generate(curve: &Curve) -> Result<EccKey, CryptoError> {
 }
 
 /// Hash negotiation parameters and fetch TEE evidence.
+#[cfg(not(all(test, test_in_svsm)))]
 fn evidence(tee: &Tee, hash: Vec<u8>) -> Result<AttestationEvidence, AttestationError> {
     let evidence = match tee {
         &Tee::Snp => {
@@ -362,6 +366,49 @@ fn evidence(tee: &Tee, hash: Vec<u8>) -> Result<AttestationEvidence, Attestation
             // AttestationRequest.
             let report =
                 try_to_vec(resp.report().as_bytes()).or(Err(AttestationError::VecAlloc))?;
+
+            AttestationEvidence::Snp {
+                report,
+                certs_buf: None,
+            }
+        }
+        // We check for supported TEE architectures in the AttestationDriver's constructor.
+        _ => unreachable!(),
+    };
+
+    Ok(evidence)
+}
+
+/// Build synthetic TEE evidence for the in-SVSM tests.
+///
+/// The tests run under `--nocc`, where there is no PSP to ask for a real
+/// attestation report. Assemble a report that is zeroed except for the two
+/// fields an attestation server looks at: the negotiation parameter hash in
+/// `report_data`, and the launch measurement supplied by the test harness. The
+/// signature is left zeroed, so this only attests successfully against a test
+/// server that does not verify it.
+///
+/// The host must implement the test I/O requests, see
+/// [`has_test_iorequests()`](crate::testutils::has_test_iorequests).
+#[cfg(all(test, test_in_svsm))]
+fn evidence(tee: &Tee, hash: Vec<u8>) -> Result<AttestationEvidence, AttestationError> {
+    use crate::testing::{LAUNCH_MEASUREMENT_SIZE, launch_measurement};
+
+    // Field offsets within `AttestationReport` (AMD SEV-SNP spec. table 21).
+    // Both are checked against the structure definition in `greq::pld_report`.
+    const REPORT_DATA_OFFSET: usize = 0x50;
+    const REPORT_DATA_SIZE: usize = 64;
+    const MEASUREMENT_OFFSET: usize = 0x90;
+
+    let evidence = match tee {
+        &Tee::Snp => {
+            let mut report: Vec<u8> =
+                vec_sized(size_of::<AttestationReport>()).or(Err(AttestationError::VecAlloc))?;
+
+            report[REPORT_DATA_OFFSET..REPORT_DATA_OFFSET + REPORT_DATA_SIZE]
+                .copy_from_slice(&hash);
+            report[MEASUREMENT_OFFSET..MEASUREMENT_OFFSET + LAUNCH_MEASUREMENT_SIZE]
+                .copy_from_slice(&launch_measurement());
 
             AttestationEvidence::Snp {
                 report,
@@ -414,6 +461,40 @@ mod tests {
                 buffer: TpmBuffer::Owned(y.to_vec()),
             },
         }
+    }
+
+    /// Run a full attestation against the host attestation proxy.
+    ///
+    /// Requires `aproxy` and a test attestation server on the host, see
+    /// `--attest` in scripts/test-in-svsm.sh. The server is configured to
+    /// expect the launch measurement of the image under test and to hand back
+    /// that same measurement as the secret payload, so that a successful
+    /// round-trip can be verified without a second channel to the host.
+    #[test]
+    #[cfg_attr(not(test_in_svsm), ignore = "Can only be run inside guest")]
+    #[cfg(test_in_svsm)]
+    fn test_attestation() {
+        use crate::testing::launch_measurement;
+        use crate::testutils::has_test_iorequests;
+
+        if !has_test_iorequests() {
+            return;
+        }
+
+        let mut driver = match AttestationDriver::try_from(Tee::Snp) {
+            Ok(driver) => driver,
+            // Nothing is listening on the attestation vsock port, so the host
+            // did not set up an attestation proxy for this run.
+            Err(SvsmError::Vsock(e)) => {
+                log::info!("attestation proxy not available ({e:?}), skipping");
+                return;
+            }
+            Err(e) => panic!("failed to set up the attestation driver: {e:?}"),
+        };
+
+        let secret = driver.attest().expect("attestation failed");
+
+        assert_eq!(&*secret, &launch_measurement()[..]);
     }
 
     mod negotiation_hash {
